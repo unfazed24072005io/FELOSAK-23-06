@@ -1039,7 +1039,45 @@ const BUDGET_CATEGORIES = [
     setEditTxId(null);
     setShowAddModal(true);
   };
-
+// Add this function in BooksListView (around line 200-300 where other functions are)
+const refreshPersonalTransactions = useCallback(async () => {
+  if (!user) return;
+  try {
+    console.log("🔄 Refreshing personal transactions...");
+    const q = query(
+      collection(db, 'transactions'), 
+      where('userId', '==', user.id), 
+      where('bookId', '==', 'personal')
+    );
+    const snapshot = await getDocs(q);
+    const fetchedTransactions: Transaction[] = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      
+      let date = data.date;
+      if (date && typeof date === 'object' && date.toDate) {
+        date = date.toDate().getTime();
+      }
+      
+      let createdAt = data.createdAt;
+      if (createdAt && typeof createdAt === 'object' && createdAt.toDate) {
+        createdAt = createdAt.toDate().getTime();
+      }
+      
+      fetchedTransactions.push({ 
+        id: doc.id, 
+        ...data,
+        date: date || createdAt,
+        goalId: data.goalId || null,
+        createdAt: createdAt || Date.now()
+      } as Transaction);
+    });
+    setPersonalTransactions(fetchedTransactions);
+    console.log("✅ Refreshed", fetchedTransactions.length, "personal transactions");
+  } catch (error) {
+    console.error('Error refreshing personal transactions:', error);
+  }
+}, [user]);	
   const openEditModal = (tx: Transaction) => {
     setAddModalMode(selectedTab);
     setAddModalBookId(tx.bookId === "personal" ? undefined : tx.bookId);
@@ -1047,11 +1085,21 @@ const BUDGET_CATEGORIES = [
     setShowAddModal(true);
   };
 
-  const closeAddModal = () => {
-    setShowAddModal(false);
-    setEditTxId(null);
-    // ✅ No navigation - stays on current page!
-  };
+  // Replace your existing closeAddModal function with this:
+const closeAddModal = useCallback(async () => {
+  setShowAddModal(false);
+  setEditTxId(null);
+  
+  // ✅ Refresh personal transactions when modal closes
+  if (selectedView === "personal") {
+    await refreshPersonalTransactions();
+  } else {
+    // For business, refresh business transactions
+    setRefreshTrigger(prev => prev + 1);
+  }
+  
+  console.log("✅ Modal closed, data refreshed");
+}, [selectedView, refreshPersonalTransactions]);
 // Add this useEffect after your other useEffects in BooksListView
 useEffect(() => {
   const updateGoalSavedAmounts = () => {
@@ -2687,47 +2735,7 @@ useFocusEffect(
     restorePage();
   }, []) // ✅ Empty array = runs once on mount
 );
-// Replace the useFocusEffect at line ~430
-useFocusEffect(
-  useCallback(() => {
-    const loadPersonalTransactions = async () => {
-      if (!user) return;
-      try {
-        console.log("🔄 Refreshing personal transactions on focus");
-        const q = query(
-          collection(db, 'transactions'), 
-          where('userId', '==', user.id), 
-          where('bookId', '==', 'personal')
-        );
-        const snapshot = await getDocs(q);
-        const fetchedTransactions: Transaction[] = [];
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          let date = data.date;
-          if (date && typeof date === 'object' && date.toDate) {
-            date = date.toDate().getTime();
-          }
-          let createdAt = data.createdAt;
-          if (createdAt && typeof createdAt === 'object' && createdAt.toDate) {
-            createdAt = createdAt.toDate().getTime();
-          }
-          fetchedTransactions.push({ 
-            id: doc.id, 
-            ...data,
-            date: date || createdAt,
-            goalId: data.goalId || null,
-            createdAt: createdAt || Date.now()
-          } as Transaction);
-        });
-        setPersonalTransactions(fetchedTransactions);
-        console.log("✅ Loaded", fetchedTransactions.length, "personal transactions");
-      } catch (error) {
-        console.error('Error loading personal transactions:', error);
-      }
-    };
-    loadPersonalTransactions();
-  }, [user, refreshTrigger]) // ✅ ADD refreshTrigger HERE
-);
+
 const personalStats = useMemo(() => {
   let totalIncome = 0;
   let totalExpense = 0;
