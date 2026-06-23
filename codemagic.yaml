@@ -1,0 +1,163 @@
+workflows:
+<<<<<<< HEAD
+  build:
+    name: Build APK with EAS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      node: 18
+      # Add the EXPO_TOKEN to your environment variables in Codemagic UI
+      # Go to: Team > Environment variables > Add new variable
+      # Name: EXPO_TOKEN
+      # Value: (paste your token from Expo dashboard)
+      # Group: Expo
+    scripts:
+      - name: npm install
+        script: npm install
+      
+      - name: Install EAS CLI
+        script: npm install -g eas-cli
+      
+      - name: Build APK
+        script: eas build --platform android --profile preview --local --non-interactive --output=./app.apk
+      
+    artifacts:
+      - "app.apk"
+=======
+  android-apk:
+<<<<<<< HEAD
+    name: Build APK
+=======
+    name: Android APK Build
+>>>>>>> 3f14237 (Update codemagic.yaml)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      node: 20
+      npm: 9
+<<<<<<< HEAD
+<<<<<<< HEAD
+
+=======
+      android: 33
+=======
+>>>>>>> f6a58bd (Update codemagic.yaml)
+    cache:
+      cache_paths:
+        - node_modules
+        - ~/.npm
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+>>>>>>> 3f14237 (Update codemagic.yaml)
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+<<<<<<< HEAD
+
+      - name: Install Expo
+        script: |
+          npm install -g expo-cli
+
+      - name: Prebuild Android
+        script: |
+          npx expo prebuild --platform android --clean
+
+      - name: Setup Android SDK
+        script: |
+          echo "y" | sdkmanager "platforms;android-33" "build-tools;33.0.0"
+
+=======
+      
+      - name: Install Expo CLI
+        script: |
+          npm install -g expo-cli
+      
+      - name: Install Expo SDK dependencies
+        script: |
+          npx expo install --fix
+      
+      - name: Setup Android project
+        script: |
+          npx expo prebuild --platform android --clean
+      
+      - name: Create keystore for signing
+        script: |
+          if [ ! -f "android/app/my-release-key.keystore" ]; then
+            keytool -genkey -v -keystore android/app/my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=, OU=, O=, L=, S=, C="
+          fi
+      
+      - name: Create signing configuration
+        script: |
+          cat > android/keystore.properties << EOF
+          storeFile=my-release-key.keystore
+          storePassword=android
+          keyAlias=my-key-alias
+          keyPassword=android
+          EOF
+      
+      - name: Update build.gradle with signing config
+        script: |
+          if ! grep -q "keystore.properties" android/app/build.gradle; then
+            sed -i '1i\
+          def keystorePropertiesFile = rootProject.file("keystore.properties")\
+          def keystoreProperties = new Properties()\
+          keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\
+          ' android/app/build.gradle
+            
+            sed -i '/signingConfigs {/a\
+                release {\
+                    keyAlias keystoreProperties["keyAlias"]\
+                    keyPassword keystoreProperties["keyPassword"]\
+                    storeFile file(keystoreProperties["storeFile"])\
+                    storePassword keystoreProperties["storePassword"]\
+                }\
+          ' android/app/build.gradle
+          fi
+      
+>>>>>>> 3f14237 (Update codemagic.yaml)
+      - name: Build APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+          cd ..
+<<<<<<< HEAD
+
+      - name: Copy APK
+        script: |
+          cp android/app/build/outputs/apk/release/app-release.apk ./app-release.apk
+
+    artifacts:
+      - app-release.apk
+      - android/app/build/outputs/apk/release/*.apk
+=======
+      
+      - name: Verify APK creation
+        script: |
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "APK built successfully!"
+            ls -la android/app/build/outputs/apk/release/
+          else
+            echo "APK not found!"
+            exit 1
+          fi
+      
+      - name: Rename APK
+        script: |
+          cp android/app/build/outputs/apk/release/app-release.apk ./FELOSAAK-APP.apk
+      
+    artifacts:
+      - FELOSAAK-APP.apk
+      - android/app/build/outputs/apk/release/*.apk
+    
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+>>>>>>> 3f14237 (Update codemagic.yaml)
+>>>>>>> recovered-work
