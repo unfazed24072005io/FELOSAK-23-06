@@ -174,12 +174,12 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // ✅ NEW: Country code state
+  // Country code state
   const [selectedCountryCode, setSelectedCountryCode] = useState('+1');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [searchCountry, setSearchCountry] = useState('');
 
-  // ✅ NEW: Filtered country codes based on search
+  // Filtered countries
   const filteredCountries = useMemo(() => {
     if (!searchCountry) return COUNTRY_CODES;
     const search = searchCountry.toLowerCase();
@@ -190,21 +190,73 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
     );
   }, [searchCountry]);
 
-  // ✅ NEW: Get current country display
+  // Get current country
   const currentCountry = useMemo(() => {
     return COUNTRY_CODES.find(c => c.code === selectedCountryCode) || COUNTRY_CODES[0];
   }, [selectedCountryCode]);
 
+  // ✅ FIXED: Pick photo from gallery
   const pickProfilePhoto = async () => {
-    // ... (keep existing function unchanged)
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission Required", "Please grant gallery access to upload photos");
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+        base64: true,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        let photoUri = asset.uri;
+        if (asset.base64) {
+          photoUri = `data:image/jpeg;base64,${asset.base64}`;
+        }
+        setProfile({ ...profile, photo: photoUri });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error("Error picking photo:", error);
+      Alert.alert("Error", "Failed to pick photo");
+    }
   };
 
+  // ✅ FIXED: Take photo with camera
   const takeProfilePhoto = async () => {
-    // ... (keep existing function unchanged)
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission Required", "Please grant camera access to take photos");
+        return;
+      }
+      
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.5,
+        base64: true,
+      });
+      
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        let photoUri = asset.uri;
+        if (asset.base64) {
+          photoUri = `data:image/jpeg;base64,${asset.base64}`;
+        }
+        setProfile({ ...profile, photo: photoUri });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error("Error taking photo:", error);
+      Alert.alert("Error", "Failed to take photo");
+    }
   };
 
   const loadProfile = async () => {
-    // ... (keep existing function unchanged but parse phone number)
     if (!user) return;
     try {
       setLoading(true);
@@ -217,11 +269,9 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
         const data = userDoc.data();
         if (data.profile) {
           const phone = data.profile.phoneNumber || "";
-          // Extract country code if present
           let code = '+1';
           let number = phone;
           
-          // Check if phone starts with a country code
           for (const country of COUNTRY_CODES) {
             if (phone.startsWith(country.code)) {
               code = country.code;
@@ -254,11 +304,7 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
           await AsyncStorage.setItem(`${ORGANIZATION_KEY}_${userId}`, JSON.stringify(data.organization));
         }
       } else {
-        // ... fallback to AsyncStorage with same phone parsing logic
-        const [savedData] = await Promise.all([
-          AsyncStorage.getItem(`${STORAGE_KEY}_${userId}`),
-        ]);
-        
+        const savedData = await AsyncStorage.getItem(`${STORAGE_KEY}_${userId}`);
         if (savedData) {
           const parsed = JSON.parse(savedData);
           const phone = parsed.phoneNumber || "";
@@ -297,7 +343,6 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
     try {
       const userId = user.id;
       
-      // ✅ Combine country code with phone number
       const fullPhoneNumber = profile.phoneNumber 
         ? `${selectedCountryCode} ${profile.phoneNumber}`
         : '';
@@ -320,7 +365,6 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
         updatedAt: Timestamp.now(),
       });
       
-      // Save full phone number to AsyncStorage
       const profileToSave = {
         ...profile,
         phoneNumber: fullPhoneNumber,
@@ -345,12 +389,44 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
     }
   }, [visible, user]);
 
+  // ✅ FIXED: Logout handler
   const handleLogoutPress = () => {
-    // ... (keep existing function unchanged)
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Sign Out", 
+          style: "destructive", 
+          onPress: () => {
+            if (onLogout) {
+              onLogout();
+            }
+          }
+        }
+      ]
+    );
   };
 
+  // ✅ FIXED: Delete account handler
   const handleDeleteAccount = () => {
-    // ... (keep existing function unchanged)
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: () => {
+            if (onDeleteAccount) {
+              onDeleteAccount();
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {
@@ -462,11 +538,10 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
                   />
                 </View>
                 
-                {/* ✅ UPDATED: Phone Number with Country Code Selector */}
+                {/* Phone Number with Country Code Selector */}
                 <View style={styles.profileField}>
                   <Text style={[styles.profileLabel, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>Phone Number</Text>
                   <View style={styles.phoneInputContainer}>
-                    {/* Country Code Selector */}
                     <Pressable 
                       onPress={() => setShowCountryPicker(true)} 
                       style={[styles.countryCodeSelector, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
@@ -476,7 +551,6 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
                       <Feather name="chevron-down" size={16} color={theme.textSecondary} />
                     </Pressable>
                     
-                    {/* Phone Number Input */}
                     <TextInput 
                       style={[styles.phoneInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: theme.text, borderColor: theme.border }]} 
                       placeholder="Enter phone number" 
@@ -488,7 +562,7 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
                   </View>
                 </View>
 
-                {/* ✅ NEW: Country Picker Modal */}
+                {/* Country Picker Modal */}
                 <Modal 
                   visible={showCountryPicker} 
                   transparent 
@@ -506,7 +580,6 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
                         </Pressable>
                       </View>
                       
-                      {/* Search Input */}
                       <View style={[styles.countrySearchContainer, { borderColor: theme.border, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                         <Feather name="search" size={18} color={theme.textSecondary} />
                         <TextInput 
@@ -624,11 +697,13 @@ function ProfileModal({ visible, onClose, theme, isDark, onLogout, onDeleteAccou
 
             <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
             
+            {/* ✅ FIXED: Delete Account button with handler */}
             <Pressable onPress={handleDeleteAccount} style={[styles.profileDeleteBtn, { backgroundColor: theme.expense + '15', borderColor: theme.expense, marginBottom: 12 }]}>
               <Feather name="trash-2" size={20} color={theme.expense} />
               <Text style={[styles.profileDeleteText, { color: theme.expense, fontFamily: "Inter_600SemiBold" }]}>Delete Account</Text>
             </Pressable>
             
+            {/* ✅ FIXED: Sign Out button with handler */}
             <Pressable onPress={handleLogoutPress} style={[styles.profileLogoutBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Feather name="log-out" size={20} color={theme.textSecondary} />
               <Text style={[styles.profileLogoutText, { color: theme.textSecondary, fontFamily: "Inter_600SemiBold" }]}>Sign Out</Text>
@@ -778,12 +853,27 @@ const [addModalMode, setAddModalMode] = useState<"personal" | "business">("perso
 const [addModalBookId, setAddModalBookId] = useState<string | undefined>(undefined);
 const [addModalBookName, setAddModalBookName] = useState<string | undefined>(undefined);
 const [editTxId, setEditTxId] = useState<string | null>(null);
+// Document edit states
+const [editingDocId, setEditingDocId] = useState<string | null>(null);
+const [editingDocField, setEditingDocField] = useState<string>("");
+const [editingDocValue, setEditingDocValue] = useState<string>("");
+
+// Book edit states
+const [editingBookId, setEditingBookId] = useState<string | null>(null);
+const [editingBookName, setEditingBookName] = useState("");
 const [showDocumentDetailModal, setShowDocumentDetailModal] = useState(false);
 // Add these with your other useState declarations in BooksListView
 const [clients, setClients] = useState<Client[]>([]);
 const [clientFilterStatus, setClientFilterStatus] = useState<"all" | "active" | "inactive">("all");
 const [showCreateClientModal, setShowCreateClientModal] = useState(false);
 const [showClientDetailModal, setShowClientDetailModal] = useState(false);
+// Add with your other useState declarations
+
+const [editingBudgetAmount, setEditingBudgetAmount] = useState<string>("");
+
+
+const [editingGoalName, setEditingGoalName] = useState<string>("");
+const [editingGoalTarget, setEditingGoalTarget] = useState<string>("");
 const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 const [documentsFilter, setDocumentsFilter] = useState<FilterType>("All");
 const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<DocumentStatus>("all");
@@ -808,7 +898,26 @@ const [createDocType, setCreateDocType] = useState<string>("Invoice");
 const [createDocPartyName, setCreateDocPartyName] = useState("");
 const [createDocAmount, setCreateDocAmount] = useState("");
 const [createDocDueDate, setCreateDocDueDate] = useState("");
+// ==================== DOCUMENT CREATION STATE ====================
+// Add these with your other useState declarations (around line 200-300)
+
+const [createPartyName, setCreatePartyName] = useState("");
+const [createDocDate, setCreateDocDate] = useState(new Date().toISOString().split("T")[0]);
+const [createDueDate, setCreateDueDate] = useState("");
+const [createInvoiceStatus, setCreateInvoiceStatus] = useState<"paid" | "unpaid">("unpaid");
+const [createReferenceNo, setCreateReferenceNo] = useState("");
+const [createOrderNo, setCreateOrderNo] = useState("");
+const [createItems, setCreateItems] = useState<any[]>([]);
+const [createTaxRate, setCreateTaxRate] = useState(14);
+const [createNotes, setCreateNotes] = useState("");
+const [isSubmittingDoc, setIsSubmittingDoc] = useState(false);
+const [showTypeSelector, setShowTypeSelector] = useState(true);
 const [createDocNotes, setCreateDocNotes] = useState("");
+const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+// Add with your other useState declarations (around line 200-300)
+const [editingTxId, setEditingTxId] = useState<string | null>(null);
+const [editingTxValue, setEditingTxValue] = useState<string>("");
+  const [editingAccountName, setEditingAccountName] = useState("");
 const [isSubmitting, setIsSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -836,6 +945,37 @@ const [showFilterModal, setShowFilterModal] = useState(false);
 const [localFilterType, setLocalFilterType] = useState<"all" | "income" | "expense">("all");
 const [localSortOrder, setLocalSortOrder] = useState<"newest" | "oldest">("newest");
 const [localNewBookName, setLocalNewBookName] = useState("");
+const [clientCountryCode, setClientCountryCode] = useState('+1');
+const [showClientCountryPicker, setShowClientCountryPicker] = useState(false);
+// Add with your other useState declarations
+const [showEditDocumentModal, setShowEditDocumentModal] = useState(false);
+// Add with your other useState declarations
+const [showEditTransactionModal, setShowEditTransactionModal] = useState(false);
+const [selectedEditTransaction, setSelectedEditTransaction] = useState<Transaction | null>(null);
+const [isSavingTransaction, setIsSavingTransaction] = useState(false);
+const [selectedEditDocument, setSelectedEditDocument] = useState<Document | null>(null);
+const [isSavingDocument, setIsSavingDocument] = useState(false);
+// Add with your other useState declarations
+const [showEditBudgetModal, setShowEditBudgetModal] = useState(false);
+const [selectedEditBudget, setSelectedEditBudget] = useState<{ id: string; category: string; budget: number; spent: number; icon: string; color: string } | null>(null);
+const [isSavingBudget, setIsSavingBudget] = useState(false);
+// Add with your other useState declarations
+const [showEditAccountModal, setShowEditAccountModal] = useState(false);
+// Add with your other useState declarations
+const [showEditGoalModal, setShowEditGoalModal] = useState(false);
+const [selectedEditGoal, setSelectedEditGoal] = useState<{ id: string; name: string; targetAmount: number; savedAmount: number; icon: string; color: string; deadline?: string } | null>(null);
+const [isSavingGoal, setIsSavingGoal] = useState(false);
+// Add with your other useState declarations
+const [showEditBookModal, setShowEditBookModal] = useState(false);
+const [editBookId, setEditBookId] = useState<string | null>(null);
+const [editBookName, setEditBookName] = useState("");
+const [editBookDescription, setEditBookDescription] = useState("");
+const [isSavingBook, setIsSavingBook] = useState(false);
+const [editAccountId, setEditAccountId] = useState<string | null>(null);
+const [editAccountName, setEditAccountName] = useState("");
+const [editAccountType, setEditAccountType] = useState("");
+const [isSavingAccountName, setIsSavingAccountName] = useState(false);
+const [searchClientCountry, setSearchClientCountry] = useState('');
   const [localNewBookDescription, setLocalNewBookDescription] = useState("");
   const [localShowBookModal, setLocalShowBookModal] = useState(false);
   const [personalTransactions, setPersonalTransactions] = useState<Transaction[]>([]);
@@ -883,6 +1023,19 @@ const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   // Calculate current month vs last month statistics
   // Calculate current month vs last month statistics for PERSONAL transactions
 // Calculate current month vs last month statistics for PERSONAL transactions
+const filteredClientCountries = useMemo(() => {
+    if (!searchClientCountry) return COUNTRY_CODES;
+    const search = searchClientCountry.toLowerCase();
+    return COUNTRY_CODES.filter(c => 
+      c.name.toLowerCase().includes(search) ||
+      c.code.includes(search) ||
+      c.country.toLowerCase().includes(search)
+    );
+  }, [searchClientCountry]);
+
+  const currentClientCountry = useMemo(() => {
+    return COUNTRY_CODES.find(c => c.code === clientCountryCode) || COUNTRY_CODES[0];
+  }, [clientCountryCode]);
 const calculateStats = useMemo(() => {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -964,7 +1117,10 @@ const calculateStats = useMemo(() => {
   console.log(`  Current Expense (${currentMonth+1}/${currentYear}): ${currentExpense}`);
   console.log(`  Last Income (${lastMonth+1}/${lastMonthYear}): ${lastIncome}`);
   console.log(`  Last Expense (${lastMonth+1}/${lastMonthYear}): ${lastExpense}`);
-  
+  // ==================== DOCUMENT HELPER FUNCTIONS ====================
+
+
+
   // Calculate percentage changes
   let incomeChange = 0;
   let expenseChange = 0;
@@ -1020,6 +1176,166 @@ const calculateStats = useMemo(() => {
     lastExpense,
   };
 }, [personalTransactions]);
+// ==================== EDIT BOOK FUNCTION ====================
+const saveBookDetails = async (bookId: string, newName: string, newDescription: string) => {
+  if (!newName.trim()) {
+    Alert.alert("Error", "Book name cannot be empty");
+    return;
+  }
+  
+  setIsSavingBook(true);
+  try {
+    const bookRef = doc(db, 'books', bookId);
+    await updateDoc(bookRef, {
+      name: newName.trim(),
+      description: newDescription || "",
+      updatedAt: Timestamp.now(),
+    });
+    
+    await refreshBooks();
+    setRefreshTrigger(prev => prev + 1);
+    setShowEditBookModal(false);
+    setEditBookId(null);
+    setEditBookName("");
+    setEditBookDescription("");
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Book updated successfully");
+  } catch (error) {
+    console.error("Error updating book:", error);
+    Alert.alert("Error", "Failed to update book");
+  } finally {
+    setIsSavingBook(false);
+  }
+};
+// ==================== EDIT GOAL FUNCTION ====================
+const saveGoalDetails = async (goalId: string, newName: string, newTarget: number) => {
+  if (!newName.trim()) {
+    Alert.alert("Error", "Goal name cannot be empty");
+    return;
+  }
+  if (newTarget <= 0) {
+    Alert.alert("Error", "Target amount must be greater than 0");
+    return;
+  }
+  
+  setIsSavingGoal(true);
+  try {
+    const goalRef = doc(db, 'goals', goalId);
+    await updateDoc(goalRef, {
+      name: newName.trim(),
+      targetAmount: newTarget,
+      updatedAt: Timestamp.now(),
+    });
+    
+    // Update local state
+    const updatedGoals = goals.map(g => 
+      g.id === goalId ? { ...g, name: newName.trim(), targetAmount: newTarget } : g
+    );
+    setGoals(updatedGoals);
+    await AsyncStorage.setItem(`goals_${user?.id}`, JSON.stringify(updatedGoals));
+    
+    setShowEditGoalModal(false);
+    setSelectedEditGoal(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Goal updated successfully");
+  } catch (error) {
+    console.error("Error updating goal:", error);
+    Alert.alert("Error", "Failed to update goal");
+  } finally {
+    setIsSavingGoal(false);
+  }
+};
+// ==================== EDIT BUDGET FUNCTION ====================
+const saveBudgetAmount = async (budgetId: string, newAmount: number) => {
+  if (newAmount <= 0) {
+    Alert.alert("Error", "Budget amount must be greater than 0");
+    return;
+  }
+  
+  setIsSavingBudget(true);
+  try {
+    const budgetRef = doc(db, 'budgets', budgetId);
+    await updateDoc(budgetRef, {
+      budget: newAmount,
+      updatedAt: Timestamp.now(),
+    });
+    
+    // Update local state
+    const updatedBudgets = budgets.map(b => 
+      b.id === budgetId ? { ...b, budget: newAmount } : b
+    );
+    setBudgets(updatedBudgets);
+    await AsyncStorage.setItem(`budgets_${user?.id}`, JSON.stringify(updatedBudgets));
+    
+    setShowEditBudgetModal(false);
+    setSelectedEditBudget(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Budget updated successfully");
+  } catch (error) {
+    console.error("Error updating budget:", error);
+    Alert.alert("Error", "Failed to update budget");
+  } finally {
+    setIsSavingBudget(false);
+  }
+};
+// ==================== EDIT ACCOUNT NAME FUNCTION ====================
+const saveAccountName = async (bookId: string, newName: string) => {
+  if (!newName.trim()) {
+    Alert.alert("Error", "Account name cannot be empty");
+    return;
+  }
+  
+  setIsSavingAccountName(true);
+  try {
+    const bookRef = doc(db, 'books', bookId);
+    await updateDoc(bookRef, {
+      name: newName.trim(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    await refreshBooks();
+    setRefreshTrigger(prev => prev + 1);
+    setShowEditAccountModal(false);
+    setEditAccountId(null);
+    setEditAccountName("");
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Account name updated successfully");
+  } catch (error) {
+    console.error("Error updating account name:", error);
+    Alert.alert("Error", "Failed to update account name");
+  } finally {
+    setIsSavingAccountName(false);
+  }
+};
+// ==================== EDIT TRANSACTION FUNCTION ====================
+const saveEditedTransaction = async (txId: string, data: any) => {
+  setIsSavingTransaction(true);
+  try {
+    const txRef = doc(db, 'transactions', txId);
+    await updateDoc(txRef, {
+      type: data.type,
+      amount: data.amount,
+      category: data.category,
+      note: data.note || "",
+      date: data.date,
+      paymentMode: data.paymentMode,
+      updatedAt: Timestamp.now(),
+    });
+    
+    await refreshPersonalTransactions();
+    setShowEditTransactionModal(false);
+    setSelectedEditTransaction(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Transaction updated successfully");
+  } catch (error) {
+    console.error("Error updating transaction:", error);
+    Alert.alert("Error", "Failed to update transaction");
+  } finally {
+    setIsSavingTransaction(false);
+  }
+};
   // Budget categories with icons and colors
 const BUDGET_CATEGORIES = [
   { name: "Food & Dining", icon: "shopping-bag", color: "#3B82F6", keywords: ["food", "dining", "restaurant", "grocery", "meal"] },
@@ -1039,6 +1355,8 @@ const BUDGET_CATEGORIES = [
     setEditTxId(null);
     setShowAddModal(true);
   };
+// ==================== DOCUMENT EDIT FUNCTION ====================
+	
 // Add this function in BooksListView (around line 200-300 where other functions are)
 const refreshPersonalTransactions = useCallback(async () => {
   if (!user) return;
@@ -1100,6 +1418,241 @@ const closeAddModal = useCallback(async () => {
   
   console.log("✅ Modal closed, data refreshed");
 }, [selectedView, refreshPersonalTransactions]);
+// ==================== TRANSACTION EDIT FUNCTIONS ====================
+const updateTransactionCategory = async (txId: string, newCategory: string) => {
+  if (!newCategory.trim()) {
+    Alert.alert("Error", "Category cannot be empty");
+    return;
+  }
+  
+  try {
+    const txRef = doc(db, 'transactions', txId);
+    await updateDoc(txRef, {
+      category: newCategory.trim(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    await refreshPersonalTransactions();
+    setEditingTxId(null);
+    setEditingTxValue("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Category updated successfully");
+  } catch (error) {
+    console.error("Error updating transaction category:", error);
+    Alert.alert("Error", "Failed to update category");
+  }
+};
+
+const deleteTransaction = async (txId: string, category: string) => {
+  const isWeb = Platform.OS === 'web';
+  
+  const performDelete = async () => {
+    try {
+      await deleteDoc(doc(db, 'transactions', txId));
+      await refreshPersonalTransactions();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Transaction deleted successfully");
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      Alert.alert("Error", "Failed to delete transaction");
+    }
+  };
+  
+  if (isWeb) {
+    if (window.confirm(`Are you sure you want to delete this transaction for "${category}"?`)) {
+      await performDelete();
+    }
+  } else {
+    Alert.alert(
+      "Delete Transaction",
+      `Are you sure you want to delete this transaction for "${category}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete }
+      ]
+    );
+  }
+};
+
+// ==================== ACCOUNT EDIT/DELETE FUNCTIONS ====================
+
+
+const deleteAccount = async (bookId: string, bookName: string) => {
+  const isWeb = Platform.OS === 'web';
+  
+  const performDelete = async () => {
+    try {
+      // Delete all transactions for this book
+      const q = query(
+        collection(db, 'transactions'),
+        where('bookId', '==', bookId),
+        where('userId', '==', user?.id)
+      );
+      const snapshot = await getDocs(q);
+      for (const doc of snapshot.docs) {
+        await deleteDoc(doc.ref);
+      }
+      
+      // Delete the book
+      await deleteDoc(doc(db, 'books', bookId));
+      
+      // Refresh books
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Account deleted successfully");
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      Alert.alert("Error", "Failed to delete account");
+    }
+  };
+  
+  if (isWeb) {
+    if (window.confirm(`Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`)) {
+      await performDelete();
+    }
+  } else {
+    Alert.alert(
+      "Delete Account",
+      `Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete }
+      ]
+    );
+  }
+};
+// ==================== DOCUMENT EDIT/DELETE FUNCTIONS ====================
+const saveDocumentField = async (docId: string, field: string, value: string) => {
+  if (!value.trim()) {
+    Alert.alert("Error", `${field} cannot be empty`);
+    return;
+  }
+  
+  try {
+    const docRef = doc(db, 'documents', docId);
+    await updateDoc(docRef, {
+      [field]: value.trim(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    await loadDocuments();
+    setEditingDocId(null);
+    setEditingDocField("");
+    setEditingDocValue("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Document updated successfully");
+  } catch (error) {
+    console.error("Error updating document:", error);
+    Alert.alert("Error", "Failed to update document");
+  }
+};
+
+const deleteDocument = async (docId: string, docNumber: string) => {
+  const isWeb = Platform.OS === 'web';
+  
+  const performDelete = async () => {
+    try {
+      await deleteDoc(doc(db, 'documents', docId));
+      await loadDocuments();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Document deleted successfully");
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      Alert.alert("Error", "Failed to delete document");
+    }
+  };
+  
+  if (isWeb) {
+    if (window.confirm(`Are you sure you want to delete document "${docNumber}"?`)) {
+      await performDelete();
+    }
+  } else {
+    Alert.alert(
+      "Delete Document",
+      `Are you sure you want to delete document "${docNumber}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete }
+      ]
+    );
+  }
+};
+
+// ==================== BOOK EDIT/DELETE FUNCTIONS ====================
+const saveBookName = async (bookId: string) => {
+  if (!editingBookName.trim()) {
+    Alert.alert("Error", "Book name cannot be empty");
+    return;
+  }
+  
+  try {
+    const bookRef = doc(db, 'books', bookId);
+    await updateDoc(bookRef, {
+      name: editingBookName.trim(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    await refreshBooks();
+    setRefreshTrigger(prev => prev + 1);
+    
+    setEditingBookId(null);
+    setEditingBookName("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Success", "Book name updated successfully");
+  } catch (error) {
+    console.error("Error updating book name:", error);
+    Alert.alert("Error", "Failed to update book name");
+  }
+};
+
+const deleteBusinessBook = async (bookId: string, bookName: string) => {
+  const isWeb = Platform.OS === 'web';
+  
+  const performDelete = async () => {
+    try {
+      // Delete all transactions for this book
+      const q = query(
+        collection(db, 'transactions'),
+        where('bookId', '==', bookId),
+        where('userId', '==', user?.id)
+      );
+      const snapshot = await getDocs(q);
+      for (const doc of snapshot.docs) {
+        await deleteDoc(doc.ref);
+      }
+      
+      // Delete the book
+      await deleteDoc(doc(db, 'books', bookId));
+      
+      // Refresh books
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Book deleted successfully");
+    } catch (error) {
+      console.error("Error deleting book:", error);
+      Alert.alert("Error", "Failed to delete book");
+    }
+  };
+  
+  if (isWeb) {
+    if (window.confirm(`Are you sure you want to delete book "${bookName}"? This will also delete all transactions associated with this book.`)) {
+      await performDelete();
+    }
+  } else {
+    Alert.alert(
+      "Delete Book",
+      `Are you sure you want to delete book "${bookName}"? This will also delete all transactions associated with this book.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete }
+      ]
+    );
+  }
+};
 // Add this useEffect after your other useEffects in BooksListView
 useEffect(() => {
   const updateGoalSavedAmounts = () => {
@@ -1201,6 +1754,53 @@ useEffect(() => {
     }, 500);
   }
 }, [personalTransactions, user]); // ✅ Remove 'goals' from dependencies
+// ==================== DELETE BUSINESS ACCOUNT FUNCTION ====================
+const deleteBusinessAccount = async (bookId: string, bookName: string) => {
+  const isWeb = Platform.OS === 'web';
+  
+  const performDelete = async () => {
+    try {
+      // Delete all transactions for this book
+      const q = query(
+        collection(db, 'transactions'),
+        where('bookId', '==', bookId),
+        where('userId', '==', user?.id)
+      );
+      const snapshot = await getDocs(q);
+      for (const doc of snapshot.docs) {
+        await deleteDoc(doc.ref);
+      }
+      
+      // Delete the book
+      await deleteDoc(doc(db, 'books', bookId));
+      
+      // Refresh books
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Account deleted successfully");
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      Alert.alert("Error", "Failed to delete account");
+    }
+  };
+  
+  if (isWeb) {
+    if (window.confirm(`Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`)) {
+      await performDelete();
+    }
+  } else {
+    Alert.alert(
+      "Delete Account",
+      `Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete }
+      ]
+    );
+  }
+};
 // Load budgets from Firestore
 useEffect(() => {
   const loadBudgets = async () => {
@@ -1938,35 +2538,7 @@ const saveGoal = useCallback(async () => {
 }, [newGoalName, newGoalTarget, newGoalIcon, newGoalDeadline, editingGoalId, user, goals]);
 // Delete goal
 // In BooksListView, replace the deleteGoal function:
-const deleteGoal = async (goalId: string) => {
-  Alert.alert(
-    "Delete Goal",
-    "Are you sure you want to delete this goal?",
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            // Delete from Firestore
-            await deleteDoc(doc(db, 'goals', goalId));
-            
-            // Update local state
-            const updatedGoals = goals.filter(g => g.id !== goalId);
-            setGoals(updatedGoals);
-            
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("Success", "Goal deleted successfully");
-          } catch (error) {
-            console.error("Error deleting goal:", error);
-            Alert.alert("Error", "Failed to delete goal");
-          }
-        }
-      }
-    ]
-  );
-};
+
   // Filter and sort transactions
   const filteredTransactions = useMemo(() => {
     let filtered = personalTransactions;
@@ -2408,7 +2980,40 @@ useEffect(() => {
 // Add these with your other useCallback functions
 const PAYMENT_TERMS = ["Net 15", "Net 30", "Net 45", "Net 60", "Due on Receipt", "End of Month"];
 const CURRENCIES = ["KWD", "USD", "EUR", "GBP", "SAR", "AED"];
-
+// ==================== EDIT NAME HELPER ====================
+const showEditNamePrompt = (
+  title: string,
+  currentValue: string,
+  onSave: (newValue: string) => void,
+  placeholder?: string
+) => {
+  const isWeb = Platform.OS === 'web';
+  
+  if (isWeb) {
+    const newValue = window.prompt(title, currentValue);
+    if (newValue !== null && newValue.trim()) {
+      onSave(newValue.trim());
+    }
+  } else {
+    Alert.prompt(
+      title,
+      placeholder || "Enter new name",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Save", 
+          onPress: (value) => {
+            if (value && value.trim()) {
+              onSave(value.trim());
+            }
+          }
+        }
+      ],
+      "plain-text",
+      currentValue
+    );
+  }
+};
 const loadClients = useCallback(async () => {
   if (!user) return;
   try {
@@ -2426,7 +3031,129 @@ const loadClients = useCallback(async () => {
     console.error('Error loading clients:', error);
   }
 }, [user]);
+// ==================== DOCUMENT CREATION FUNCTIONS ====================
+// Add these after your other function declarations in BooksListView
 
+const formatAmount = (amount: number) => `${getCurrencyCode()} ${amount.toLocaleString('en-EG')}`;
+
+const getDocumentNumber = () => {
+  const prefix = {
+    "Invoice": "INV",
+    "Quote": "Q",
+    "Credit Note": "CN",
+    "Purchase Order": "PO"
+  }[createDocType];
+  return `${prefix}-${Date.now().toString().slice(-8)}`;
+};
+
+const addDocItem = () => {
+  const newItem = {
+    id: Date.now().toString(),
+    name: "",
+    quantity: 1,
+    price: 0,
+    total: 0,
+  };
+  setCreateItems([...createItems, newItem]);
+};
+
+const updateDocItem = (id: string, field: string, value: string | number) => {
+  setCreateItems(prev => prev.map(item => {
+    if (item.id !== id) return item;
+    const updated = { ...item, [field]: value };
+    if (field === 'quantity' || field === 'price') {
+      const qty = field === 'quantity' ? Number(value) : item.quantity;
+      const price = field === 'price' ? Number(value) : item.price;
+      updated.total = qty * price;
+    }
+    return updated;
+  }));
+};
+
+const removeDocItem = (id: string) => {
+  setCreateItems(prev => prev.filter(item => item.id !== id));
+};
+
+const resetDocumentForm = () => {
+  setCreateDocType("Invoice");
+  setCreatePartyName("");
+  setCreateDocDate(new Date().toISOString().split("T")[0]);
+  setCreateDueDate("");
+  setCreateInvoiceStatus("unpaid");
+  setCreateReferenceNo("");
+  setCreateOrderNo("");
+  setCreateItems([]);
+  setCreateTaxRate(14);
+  setCreateNotes("");
+  setShowTypeSelector(true);
+};
+
+const saveDocument = async () => {
+  console.log("🔵🔵🔵 SAVE DOCUMENT FROM MODAL 🔵🔵🔵");
+  
+  if (!createPartyName.trim()) {
+    Alert.alert("Error", "Please enter party name");
+    return;
+  }
+  if (createItems.length === 0) {
+    Alert.alert("Error", "Please add at least one item");
+    return;
+  }
+  
+  setIsSubmittingDoc(true);
+  
+  try {
+    const subtotal = createItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax = subtotal * (createTaxRate / 100);
+    const total = subtotal + tax;
+    
+    const newDocument: any = {
+      number: getDocumentNumber(),
+      type: createDocType,
+      partyName: createPartyName.trim(),
+      amount: total,
+      date: createDocDate,
+      dueDate: createDueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      notes: createNotes,
+      items: createItems,
+      bookId: "",
+      userId: user?.id || "",
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      status: "unpaid",
+    };
+    
+    if (createDocType === "Invoice") {
+      newDocument.status = createInvoiceStatus;
+      newDocument.invoiceStatus = createInvoiceStatus;
+    }
+    
+    if (["Credit Note", "Purchase Order", "Quote"].includes(createDocType)) {
+      newDocument.referenceNo = createReferenceNo;
+      newDocument.orderNo = createOrderNo;
+    }
+    
+    console.log("🔵 Saving document:", newDocument);
+    
+    const docRef = await addDoc(collection(db, 'documents'), newDocument);
+    console.log("✅ Document saved with ID:", docRef.id);
+    
+    await loadDocuments();
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    resetDocumentForm();
+    setShowCreateDocumentModal(false);
+    
+    Alert.alert("Success", `${createDocType} created successfully!`);
+    
+  } catch (error: any) {
+    console.error("🔴 Save error:", error);
+    Alert.alert("Error", error.message || "Failed to save document");
+  } finally {
+    setIsSubmittingDoc(false);
+  }
+};
 useEffect(() => {
   loadClients();
 }, [loadClients, refreshTrigger]);
@@ -2441,6 +3168,7 @@ const resetClientForm = () => {
   setClientFormTaxId("");
   setClientFormInternalNotes("");
   setClientFormStatus("active");
+  setClientCountryCode('+1'); // ✅ Reset country code
   setIsEditingClient(false);
   setSelectedClient(null);
 };
@@ -2448,11 +3176,6 @@ const resetClientForm = () => {
 
 const saveClient = async () => {
   console.log("🔵🔵🔵 SAVE CLIENT FUNCTION STARTED 🔵🔵🔵");
-  console.log("🔵 user:", user?.id);
-  console.log("🔵 clientFormName:", clientFormName);
-  console.log("🔵 isEditingClient:", isEditingClient);
-  console.log("🔵 selectedClient:", selectedClient?.id);
-  console.log("🔵 isSubmittingClient BEFORE:", isSubmittingClient);
   
   if (!clientFormName.trim()) {
     console.log("🔴 ERROR: Client name is empty");
@@ -2470,11 +3193,16 @@ const saveClient = async () => {
   setIsSubmittingClient(true);
   
   try {
+    // ✅ Combine country code with phone number
+    const fullPhoneNumber = clientFormPhone 
+      ? `${clientCountryCode} ${clientFormPhone}`
+      : '';
+    
     const clientData = {
       name: clientFormName.trim(),
       company: clientFormCompany.trim(),
       email: clientFormEmail.trim(),
-      phone: clientFormPhone.trim(),
+      phone: fullPhoneNumber, // ✅ Save full phone number
       currency: clientFormCurrency,
       paymentTerms: clientFormPaymentTerms,
       taxId: clientFormTaxId.trim(),
@@ -2528,7 +3256,22 @@ const editClient = (client: Client) => {
   setClientFormName(client.name);
   setClientFormCompany(client.company || "");
   setClientFormEmail(client.email || "");
-  setClientFormPhone(client.phone || "");
+  
+  // ✅ Parse phone number to extract country code
+  const phone = client.phone || "";
+  let code = '+1';
+  let number = phone;
+  
+  for (const country of COUNTRY_CODES) {
+    if (phone.startsWith(country.code)) {
+      code = country.code;
+      number = phone.substring(country.code.length).trim();
+      break;
+    }
+  }
+  
+  setClientCountryCode(code);
+  setClientFormPhone(number);
   setClientFormCurrency(client.currency || getCurrencyCode());
   setClientFormPaymentTerms(client.paymentTerms || "Net 30");
   setClientFormTaxId(client.taxId || "");
@@ -3136,6 +3879,50 @@ const handleCreateAccount = async () => {
     setIsCreating(false);
   }
 };
+const handleCreateBookOnly = async () => {
+    if (!localNewBookName.trim()) {
+      Alert.alert("Error", "Please enter a book name");
+      return;
+    }
+    
+    if (!user) {
+      Alert.alert("Error", "You must be logged in");
+      return;
+    }
+    
+    try {
+      const newBookData = {
+        name: localNewBookName,
+        description: localNewBookDescription || "",
+        type: "business",
+        category: "book",
+        isCloud: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        userId: user.id,
+        role: "owner",
+        icon: "📚",
+        color: "#" + Math.floor(Math.random()*16777215).toString(16),
+      };
+      
+      console.log("🔵 Creating BOOK from Books page:", newBookData);
+      
+      const booksRef = collection(db, 'books');
+      await addDoc(booksRef, newBookData);
+      
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      Alert.alert("Success", "Book created successfully!");
+      setLocalShowBookModal(false);
+      setLocalNewBookName("");
+      setLocalNewBookDescription("");
+      
+    } catch (error) {
+      console.error("Error creating book:", error);
+      Alert.alert("Error", "Failed to create book");
+    }
+  };
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0);
 
   const bookCategories = useMemo(() => [
@@ -3144,7 +3931,6 @@ const handleCreateAccount = async () => {
     { id: 'investments', name: 'INVESTMENTS', icon: 'trending-up', color: '#10B981', books: categorizedBooks.investments },
     { id: 'assets', name: 'ASSETS', icon: 'package', color: '#F59E0B', books: categorizedBooks.assets },
   ], [categorizedBooks]);
-
   const activeBookCategories = useMemo(() => {
     console.log("🔄 Computing activeBookCategories, categorizedBooks:", {
       banks: categorizedBooks.banks.length,
@@ -3170,7 +3956,135 @@ const handleCreateAccount = async () => {
       refreshBooks();
     }
   }, [selectedView]);
-  
+  const updateBudget = async (budgetId: string, newBudget: number) => {
+    if (newBudget <= 0) {
+      Alert.alert("Error", "Budget amount must be greater than 0");
+      return;
+    }
+    
+    try {
+      const budgetRef = doc(db, 'budgets', budgetId);
+      await updateDoc(budgetRef, {
+        budget: newBudget,
+        updatedAt: Timestamp.now(),
+      });
+      
+      const updatedBudgets = budgets.map(b => 
+        b.id === budgetId ? { ...b, budget: newBudget } : b
+      );
+      setBudgets(updatedBudgets);
+      await AsyncStorage.setItem(`budgets_${user?.id}`, JSON.stringify(updatedBudgets));
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Budget updated successfully");
+    } catch (error) {
+      console.error("Error updating budget:", error);
+      Alert.alert("Error", "Failed to update budget");
+    }
+  };
+
+  const deleteBudget = async (budgetId: string, category: string) => {
+    const isWeb = Platform.OS === 'web';
+    
+    const performDelete = async () => {
+      try {
+        await deleteDoc(doc(db, 'budgets', budgetId));
+        
+        const updatedBudgets = budgets.filter(b => b.id !== budgetId);
+        setBudgets(updatedBudgets);
+        await AsyncStorage.setItem(`budgets_${user?.id}`, JSON.stringify(updatedBudgets));
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("Success", `Budget for "${category}" deleted successfully`);
+      } catch (error) {
+        console.error("Error deleting budget:", error);
+        Alert.alert("Error", "Failed to delete budget");
+      }
+    };
+    
+    if (isWeb) {
+      if (window.confirm(`Are you sure you want to delete the budget for "${category}"?`)) {
+        await performDelete();
+      }
+    } else {
+      Alert.alert(
+        "Delete Budget",
+        `Are you sure you want to delete the budget for "${category}"?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: performDelete }
+        ]
+      );
+    }
+  };
+
+  // ✅ ADD GOAL FUNCTIONS HERE
+  const updateGoal = async (goalId: string, newName: string, newTarget: number) => {
+    if (!newName.trim()) {
+      Alert.alert("Error", "Goal name cannot be empty");
+      return;
+    }
+    if (newTarget <= 0) {
+      Alert.alert("Error", "Target amount must be greater than 0");
+      return;
+    }
+    
+    try {
+      const goalRef = doc(db, 'goals', goalId);
+      await updateDoc(goalRef, {
+        name: newName.trim(),
+        targetAmount: newTarget,
+        updatedAt: Timestamp.now(),
+      });
+      
+      const updatedGoals = goals.map(g => 
+        g.id === goalId ? { ...g, name: newName.trim(), targetAmount: newTarget } : g
+      );
+      setGoals(updatedGoals);
+      await AsyncStorage.setItem(`goals_${user?.id}`, JSON.stringify(updatedGoals));
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Goal updated successfully");
+    } catch (error) {
+      console.error("Error updating goal:", error);
+      Alert.alert("Error", "Failed to update goal");
+    }
+  };
+
+  const deleteGoal = async (goalId: string, goalName: string) => {
+    const isWeb = Platform.OS === 'web';
+    
+    const performDelete = async () => {
+      try {
+        await deleteDoc(doc(db, 'goals', goalId));
+        
+        const updatedGoals = goals.filter(g => g.id !== goalId);
+        setGoals(updatedGoals);
+        await AsyncStorage.setItem(`goals_${user?.id}`, JSON.stringify(updatedGoals));
+        
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("Success", `Goal "${goalName}" deleted successfully`);
+      } catch (error) {
+        console.error("Error deleting goal:", error);
+        Alert.alert("Error", "Failed to delete goal");
+      }
+    };
+    
+    if (isWeb) {
+      if (window.confirm(`Are you sure you want to delete the goal "${goalName}"?`)) {
+        await performDelete();
+      }
+    } else {
+      Alert.alert(
+        "Delete Goal",
+        `Are you sure you want to delete the goal "${goalName}"?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: performDelete }
+        ]
+      );
+    }
+  };
   const handleAddPersonalTransaction = () => {
   console.log("🔵 Navigating to add transaction from personal mode");
   console.log("🔵 Current page:", currentPage);
@@ -3189,6 +4103,7 @@ const handleCreateAccount = async () => {
   // Render Accounts Page (Business) - Shows BUSINESS ACCOUNTS with transactions
 // Render Accounts Page (Business) - Shows ONLY BUSINESS ACCOUNTS with transactions
 // Render Accounts Page (Business) - Shows ONLY BUSINESS ACCOUNTS
+// ==================== RENDER ACCOUNTS CONTENT ====================
 const renderAccountsContent = () => {
   // Get ONLY business accounts (must have category and NOT be "book")
   const businessAccounts = books.filter(b => 
@@ -3220,6 +4135,121 @@ const renderAccountsContent = () => {
   const toggleAccountExpansion = (bookId: string) => {
     setExpandedAccountId(expandedAccountId === bookId ? null : bookId);
   };
+
+  // Edit account name
+  
+
+  const startEditAccount = (book: CashBook) => {
+    setEditingAccountId(book.id);
+    setEditingAccountName(book.name);
+  };
+
+  const saveAccountName = async (bookId: string) => {
+    if (!editingAccountName.trim()) {
+      Alert.alert("Error", "Account name cannot be empty");
+      return;
+    }
+    
+    try {
+      const bookRef = doc(db, 'books', bookId);
+      await updateDoc(bookRef, {
+        name: editingAccountName.trim(),
+        updatedAt: Timestamp.now(),
+      });
+      
+      // Refresh books
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      setEditingAccountId(null);
+      setEditingAccountName("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Account name updated successfully");
+    } catch (error) {
+      console.error("Error updating account name:", error);
+      Alert.alert("Error", "Failed to update account name");
+    }
+  };
+
+  const deleteAccount = async (bookId: string, bookName: string) => {
+  // Check if running on web or native
+  const isWeb = Platform.OS === 'web';
+  
+  if (isWeb) {
+    // Web: Use window.confirm
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      // Delete all transactions for this book
+      const q = query(
+        collection(db, 'transactions'),
+        where('bookId', '==', bookId),
+        where('userId', '==', user?.id)
+      );
+      const snapshot = await getDocs(q);
+      for (const doc of snapshot.docs) {
+        await deleteDoc(doc.ref);
+      }
+      
+      // Delete the book
+      await deleteDoc(doc(db, 'books', bookId));
+      
+      // Refresh books
+      await refreshBooks();
+      setRefreshTrigger(prev => prev + 1);
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Account deleted successfully");
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      Alert.alert("Error", "Failed to delete account");
+    }
+  } else {
+    // Native: Use Alert.alert
+    Alert.alert(
+      "Delete Account",
+      `Are you sure you want to delete "${bookName}"? This will also delete all transactions associated with this account.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Delete all transactions for this book
+              const q = query(
+                collection(db, 'transactions'),
+                where('bookId', '==', bookId),
+                where('userId', '==', user?.id)
+              );
+              const snapshot = await getDocs(q);
+              for (const doc of snapshot.docs) {
+                await deleteDoc(doc.ref);
+              }
+              
+              // Delete the book
+              await deleteDoc(doc(db, 'books', bookId));
+              
+              // Refresh books
+              await refreshBooks();
+              setRefreshTrigger(prev => prev + 1);
+              
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("Success", "Account deleted successfully");
+            } catch (error) {
+              console.error("Error deleting account:", error);
+              Alert.alert("Error", "Failed to delete account");
+            }
+          }
+        }
+      ]
+    );
+  }
+};
   
   // Get transactions for a specific account
   const getAccountTransactions = (bookId: string) => {
@@ -3256,48 +4286,111 @@ const renderAccountsContent = () => {
                 const isLinked = book.userId !== user?.id;
                 const bookTransactions = getAccountTransactions(book.id);
                 const isExpanded = expandedAccountId === book.id;
+                const isEditing = editingAccountId === book.id;
                 
                 return (
                   <View key={book.id} style={styles.bookContainer}>
-                    {/* Account Card - Click to expand */}
-                    <Pressable 
-                      onPress={() => toggleAccountExpansion(book.id)} 
-                      style={styles.accountCard}
-                    >
+                    {/* Account Card */}
+                    <View style={styles.accountCard}>
                       <View style={[styles.accountCardIcon, { backgroundColor: `${category.color}15` }]}>
                         <Feather name={category.icon as any} size={22} color={category.color} />
                       </View>
+                      
                       <View style={styles.accountCardInfo}>
-                        <Text style={styles.accountCardName}>{book.name}</Text>
-                        <View style={styles.accountCardChips}>
-                          {isLinked && (
-                            <View style={[styles.chip, styles.linkedChip]}>
-                              <Feather name="link" size={10} color="#10B981" />
-                              <Text style={styles.chipTextLinked}>Linked</Text>
+                        {isEditing ? (
+                          <View style={styles.editNameContainer}>
+                            <TextInput
+                              style={styles.editNameInput}
+                              value={editingAccountName}
+                              onChangeText={setEditingAccountName}
+                              autoFocus
+                              placeholder="Enter account name"
+                              placeholderTextColor="#9CA3AF"
+                            />
+                            <View style={styles.editNameActions}>
+                              <Pressable 
+                                onPress={() => {
+                                  setEditingAccountId(null);
+                                  setEditingAccountName("");
+                                }} 
+                                style={[styles.editNameBtn, styles.editNameCancel]}
+                              >
+                                <Feather name="x" size={14} color="#6B7280" />
+                              </Pressable>
+                              <Pressable 
+                                onPress={() => saveAccountName(book.id)} 
+                                style={[styles.editNameBtn, styles.editNameSave]}
+                              >
+                                <Feather name="check" size={14} color="#FFFFFF" />
+                              </Pressable>
                             </View>
+                          </View>
+                        ) : (
+                          <>
+                            <Text style={styles.accountCardName}>{book.name}</Text>
+                            <View style={styles.accountCardChips}>
+                              {isLinked && (
+                                <View style={[styles.chip, styles.linkedChip]}>
+                                  <Feather name="link" size={10} color="#10B981" />
+                                  <Text style={styles.chipTextLinked}>Linked</Text>
+                                </View>
+                              )}
+                              <View style={[styles.chip, styles.businessChip]}>
+                                <Feather name="briefcase" size={10} color="#F59E0B" />
+                                <Text style={styles.chipTextBusiness}>Business</Text>
+                              </View>
+                              <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
+                                <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
+                                  {bookTransactions.length} txns
+                                </Text>
+                              </View>
+                            </View>
+                          </>
+                        )}
+                      </View>
+                      
+                      <View style={styles.accountCardRight}>
+                        <Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
+                          {formatCurrencyLarge(balance)}
+                        </Text>
+                        
+                        {/* Action Buttons */}
+                        <View style={styles.accountActionButtons}>
+                          {!isEditing && (
+                            <>
+                              
+<Pressable 
+  onPress={() => {
+    setEditAccountId(book.id);
+    setEditAccountName(book.name);
+    setEditAccountType(book.category || "Account");
+    setShowEditAccountModal(true);
+  }} 
+  style={styles.accountActionBtn}
+>
+  <Feather name="edit-2" size={14} color="#3B82F6" />
+</Pressable>
+                              <Pressable 
+                                onPress={() => deleteAccount(book.id, book.name)} 
+                                style={styles.accountActionBtn}
+                              >
+                                <Feather name="trash-2" size={14} color="#EF4444" />
+                              </Pressable>
+                            </>
                           )}
-                          <View style={[styles.chip, styles.businessChip]}>
-                            <Feather name="briefcase" size={10} color="#F59E0B" />
-                            <Text style={styles.chipTextBusiness}>Business</Text>
-                          </View>
-                          <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
-                            <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
-                              {bookTransactions.length} txns
-                            </Text>
-                          </View>
+                          <Pressable 
+                            onPress={() => toggleAccountExpansion(book.id)} 
+                            style={styles.accountExpandBtn}
+                          >
+                            <Feather 
+                              name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                              size={18} 
+                              color="#9CA3AF" 
+                            />
+                          </Pressable>
                         </View>
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
-                          {getCurrencyCode()} {Math.abs(balance).toLocaleString('en-EG')}
-                        </Text>
-                        <Feather 
-                          name={isExpanded ? 'chevron-up' : 'chevron-down'} 
-                          size={20} 
-                          color="#9CA3AF" 
-                        />
-                      </View>
-                    </Pressable>
+                    </View>
                     
                     {/* Expanded Transactions List */}
                     {isExpanded && (
@@ -3305,12 +4398,12 @@ const renderAccountsContent = () => {
                         <View style={styles.expandedHeader}>
                           <Text style={styles.expandedTitle}>Transactions</Text>
                           <Pressable 
-  onPress={() => openAddModal("business", book.id, book.name)} 
-  style={styles.expandedAddBtn}
->
-  <Feather name="plus-circle" size={16} color="#FFFFFF" />
-  <Text style={styles.expandedAddBtnText}>Add</Text>
-</Pressable>
+                            onPress={() => openAddModal("business", book.id, book.name)} 
+                            style={styles.expandedAddBtn}
+                          >
+                            <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                            <Text style={styles.expandedAddBtnText}>Add</Text>
+                          </Pressable>
                         </View>
                         
                         {bookTransactions.length === 0 ? (
@@ -3318,10 +4411,7 @@ const renderAccountsContent = () => {
                             <Feather name="inbox" size={32} color="#D1D5DB" />
                             <Text style={styles.emptyTransactionsText}>No transactions yet</Text>
                             <Pressable 
-                              onPress={() => {
-                                setActiveBook(book);
-                                router.push("/add-transaction");
-                              }} 
+                              onPress={() => openAddModal("business", book.id, book.name)} 
                               style={styles.emptyAddBtn}
                             >
                               <Text style={styles.emptyAddBtnText}>Add your first transaction</Text>
@@ -3338,7 +4428,7 @@ const renderAccountsContent = () => {
                                 <Text style={styles.expandedTxDate}>{formatDate(tx.createdAt)}</Text>
                               </View>
                               <Text style={[styles.expandedTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
-                                {tx.type === 'income' ? '+' : '-'} {getCurrencyCode()} {tx.amount.toLocaleString('en-EG')}
+                                {tx.type === 'income' ? '+' : '-'} {formatCurrencyLarge(tx.amount)}
                               </Text>
                             </View>
                           ))
@@ -3369,110 +4459,122 @@ const renderAccountsContent = () => {
           <Feather name="briefcase" size={48} color="#D1D5DB" />
           <Text style={styles.emptyBusinessTitle}>No Business Accounts Yet</Text>
           <Text style={styles.emptyBusinessText}>Create your first business account to get started</Text>
-          // In the business view section of renderHomeContent, replace the empty state button:
-
-<Pressable 
-  onPress={() => {
-    console.log("🔵 Creating ACCOUNT from home screen");
-    // Set the type and category first
-    setNewBookType("business");
-    setNewBookCategory("assets");
-    // Then show the modal
-    setShowCreateBookModal(true);
-  }} 
-  style={styles.emptyBusinessBtn}
->
-  <Text style={styles.emptyBusinessBtnText}>Create Account</Text>
-</Pressable>
+          <Pressable 
+            onPress={() => {
+              setNewBookType("business");
+              setNewBookCategory("assets");
+              setShowCreateBookModal(true);
+            }} 
+            style={styles.emptyBusinessBtn}
+          >
+            <Text style={styles.emptyBusinessBtnText}>Create Account</Text>
+          </Pressable>
         </View>
       )}
+{/* Edit Account Name Modal */}
+<EditAccountNameModal
+  visible={showEditAccountModal}
+  onClose={() => {
+    setShowEditAccountModal(false);
+    setEditAccountId(null);
+    setEditAccountName("");
+  }}
+  onSave={(newName) => {
+    if (editAccountId) {
+      saveAccountName(editAccountId, newName);
+    }
+  }}
+  accountName={editAccountName}
+  accountType={editAccountType}
+  loading={isSavingAccountName}
+/>
     </View>
   );
 };
-  // Render Transactions Page (Personal)
-  // Render Transactions Page (Personal)
+// ==================== RENDER TRANSACTIONS CONTENT ====================
 const renderTransactionsContent = () => {
-  {/* Filter Modal - Using top-level state */}
-<Modal visible={showFilterModal} transparent animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
-  <View style={styles.modalOverlay}>
-    <View style={[styles.modalContent, { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 400 }]}>
-      <View style={styles.modalHeader}>
-        <Text style={[styles.modalTitle, { color: '#111827', fontFamily: "Inter_700Bold" }]}>Filter Transactions</Text>
-        <Pressable onPress={() => setShowFilterModal(false)} hitSlop={8}>
-          <Feather name="x" size={24} color="#6B7280" />
-        </Pressable>
-      </View>
-      
-      <Text style={[styles.filterModalLabel, { fontFamily: "Inter_600SemiBold" }]}>Transaction Type</Text>
-      <View style={styles.filterTypeRow}>
-        <Pressable 
-          onPress={() => setLocalFilterType("all")} 
-          style={[styles.filterTypeChip, localFilterType === "all" && styles.filterTypeChipActive]}
-        >
-          <Text style={[styles.filterTypeText, localFilterType === "all" && styles.filterTypeTextActive]}>All</Text>
-        </Pressable>
-        <Pressable 
-          onPress={() => setLocalFilterType("income")} 
-          style={[styles.filterTypeChip, localFilterType === "income" && styles.filterTypeChipActiveIncome]}
-        >
-          <Text style={[styles.filterTypeText, localFilterType === "income" && styles.filterTypeTextActive]}>Income</Text>
-        </Pressable>
-        <Pressable 
-          onPress={() => setLocalFilterType("expense")} 
-          style={[styles.filterTypeChip, localFilterType === "expense" && styles.filterTypeChipActiveExpense]}
-        >
-          <Text style={[styles.filterTypeText, localFilterType === "expense" && styles.filterTypeTextActive]}>Expense</Text>
-        </Pressable>
-      </View>
-      
-      <Text style={[styles.filterModalLabel, { fontFamily: "Inter_600SemiBold" }]}>Sort Order</Text>
-      <View style={styles.filterSortRow}>
-        <Pressable 
-          onPress={() => setLocalSortOrder("newest")} 
-          style={[styles.filterSortChip, localSortOrder === "newest" && styles.filterSortChipActive]}
-        >
-          <Text style={[styles.filterSortText, localSortOrder === "newest" && styles.filterSortTextActive]}>Newest First</Text>
-        </Pressable>
-        <Pressable 
-          onPress={() => setLocalSortOrder("oldest")} 
-          style={[styles.filterSortChip, localSortOrder === "oldest" && styles.filterSortChipActive]}
-        >
-          <Text style={[styles.filterSortText, localSortOrder === "oldest" && styles.filterSortTextActive]}>Oldest First</Text>
-        </Pressable>
-      </View>
-      
-      <View style={styles.filterModalActions}>
-        <Pressable 
-          onPress={() => setShowFilterModal(false)} 
-          style={[styles.filterModalBtn, { backgroundColor: '#F3F4F6' }]}
-        >
-          <Text style={[styles.filterModalBtnText, { color: '#6B7280' }]}>Cancel</Text>
-        </Pressable>
-        <Pressable 
-          onPress={() => {
-            console.log("🔵 Applying filters:", { localFilterType, localSortOrder });
-            setFilterType(localFilterType);
-            setSortOrder(localSortOrder);
-            setShowFilterModal(false);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }} 
-          style={[styles.filterModalBtn, { backgroundColor: '#3B82F6' }]}
-        >
-          <Text style={[styles.filterModalBtnText, { color: '#FFFFFF' }]}>Apply Filters</Text>
-        </Pressable>
+  // Filter Modal
+  <Modal visible={showFilterModal} transparent animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
+    <View style={styles.modalOverlay}>
+      <View style={[styles.modalContent, { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 400 }]}>
+        <View style={styles.modalHeader}>
+          <Text style={[styles.modalTitle, { color: '#111827', fontFamily: "Inter_700Bold" }]}>Filter Transactions</Text>
+          <Pressable onPress={() => setShowFilterModal(false)} hitSlop={8}>
+            <Feather name="x" size={24} color="#6B7280" />
+          </Pressable>
+        </View>
+        
+        <Text style={[styles.filterModalLabel, { fontFamily: "Inter_600SemiBold" }]}>Transaction Type</Text>
+        <View style={styles.filterTypeRow}>
+          <Pressable 
+            onPress={() => setLocalFilterType("all")} 
+            style={[styles.filterTypeChip, localFilterType === "all" && styles.filterTypeChipActive]}
+          >
+            <Text style={[styles.filterTypeText, localFilterType === "all" && styles.filterTypeTextActive]}>All</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => setLocalFilterType("income")} 
+            style={[styles.filterTypeChip, localFilterType === "income" && styles.filterTypeChipActiveIncome]}
+          >
+            <Text style={[styles.filterTypeText, localFilterType === "income" && styles.filterTypeTextActive]}>Income</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => setLocalFilterType("expense")} 
+            style={[styles.filterTypeChip, localFilterType === "expense" && styles.filterTypeChipActiveExpense]}
+          >
+            <Text style={[styles.filterTypeText, localFilterType === "expense" && styles.filterTypeTextActive]}>Expense</Text>
+          </Pressable>
+        </View>
+        
+        <Text style={[styles.filterModalLabel, { fontFamily: "Inter_600SemiBold" }]}>Sort Order</Text>
+        <View style={styles.filterSortRow}>
+          <Pressable 
+            onPress={() => setLocalSortOrder("newest")} 
+            style={[styles.filterSortChip, localSortOrder === "newest" && styles.filterSortChipActive]}
+          >
+            <Text style={[styles.filterSortText, localSortOrder === "newest" && styles.filterSortTextActive]}>Newest First</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => setLocalSortOrder("oldest")} 
+            style={[styles.filterSortChip, localSortOrder === "oldest" && styles.filterSortChipActive]}
+          >
+            <Text style={[styles.filterSortText, localSortOrder === "oldest" && styles.filterSortTextActive]}>Oldest First</Text>
+          </Pressable>
+        </View>
+        
+        <View style={styles.filterModalActions}>
+          <Pressable 
+            onPress={() => setShowFilterModal(false)} 
+            style={[styles.filterModalBtn, { backgroundColor: '#F3F4F6' }]}
+          >
+            <Text style={[styles.filterModalBtnText, { color: '#6B7280' }]}>Cancel</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => {
+              console.log("🔵 Applying filters:", { localFilterType, localSortOrder });
+              setFilterType(localFilterType);
+              setSortOrder(localSortOrder);
+              setShowFilterModal(false);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }} 
+            style={[styles.filterModalBtn, { backgroundColor: '#3B82F6' }]}
+          >
+            <Text style={[styles.filterModalBtnText, { color: '#FFFFFF' }]}>Apply Filters</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
-  </View>
-</Modal>
+  </Modal>
+
   return (
     <View style={styles.transactionsSection}>
       {/* Header */}
       <View style={styles.businessHeader}>
         <Text style={styles.businessTitle}>Transactions</Text>
         <Pressable onPress={() => openAddModal("personal")} style={styles.businessAddTransBtn}>
-  <Feather name="plus-circle" size={16} color="#FFFFFF" />
-  <Text style={styles.businessAddTransText}>Add Transaction</Text>
-</Pressable>
+          <Feather name="plus-circle" size={16} color="#FFFFFF" />
+          <Text style={styles.businessAddTransText}>Add Transaction</Text>
+        </Pressable>
       </View>
       
       {/* Search Bar */}
@@ -3543,72 +4645,37 @@ const renderTransactionsContent = () => {
       </View>
       
       {/* Stats Card */}
-{/* Stats Card - Updated with vertical layout for vs last month */}
-<View style={styles.statsCard}>
-  <View style={styles.statsCardLeft}>
-    <Text style={styles.statsCardLabel}>Total Income</Text>
-    <Text style={styles.statsCardAmount}>{getCurrencyCode()} {calculateStats.totalIncome.toLocaleString('en-EG')}</Text>
-    <View style={styles.statsCardTrendVertical}>
-      <View style={[styles.statsTrendChip, { backgroundColor: calculateStats.isIncomeUp ? '#10B98120' : '#EF444420' }]}>
-        <Feather name={calculateStats.isIncomeUp ? "arrow-up" : "arrow-down"} size={12} color={calculateStats.isIncomeUp ? '#10B981' : '#EF4444'} />
-        <Text style={[styles.statsTrendPercent, { color: calculateStats.isIncomeUp ? '#10B981' : '#EF4444' }]}>
-          {calculateStats.totalIncome > 0 || calculateStats.lastIncome > 0 ? Math.abs(calculateStats.incomeChange).toFixed(1) + '%' : '0%'}
-        </Text>
+      <View style={styles.statsCard}>
+        <View style={styles.statsCardLeft}>
+          <Text style={styles.statsCardLabel}>Total Income</Text>
+          <Text style={styles.statsCardAmount}>{getCurrencyCode()} {calculateStats.totalIncome.toLocaleString('en-EG')}</Text>
+          <View style={styles.statsCardTrendVertical}>
+            <View style={[styles.statsTrendChip, { backgroundColor: calculateStats.isIncomeUp ? '#10B98120' : '#EF444420' }]}>
+              <Feather name={calculateStats.isIncomeUp ? "arrow-up" : "arrow-down"} size={12} color={calculateStats.isIncomeUp ? '#10B981' : '#EF4444'} />
+              <Text style={[styles.statsTrendPercent, { color: calculateStats.isIncomeUp ? '#10B981' : '#EF4444' }]}>
+                {calculateStats.totalIncome > 0 || calculateStats.lastIncome > 0 ? Math.abs(calculateStats.incomeChange).toFixed(1) + '%' : '0%'}
+              </Text>
+            </View>
+            <Text style={styles.statsCardVs}>vs last month</Text>
+          </View>
+        </View>
+        <View style={styles.statsDivider} />
+        <View style={styles.statsCardRight}>
+          <Text style={styles.statsCardLabel}>Total Expense</Text>
+          <Text style={styles.statsCardAmount}>{getCurrencyCode()} {calculateStats.totalExpense.toLocaleString('en-EG')}</Text>
+          <View style={styles.statsCardTrendVertical}>
+            <View style={[styles.statsTrendChip, { backgroundColor: calculateStats.isExpenseUp ? '#EF444420' : '#10B98120' }]}>
+              <Feather name={calculateStats.isExpenseUp ? "arrow-up" : "arrow-down"} size={12} color={calculateStats.isExpenseUp ? '#EF4444' : '#10B981'} />
+              <Text style={[styles.statsTrendPercent, { color: calculateStats.isExpenseUp ? '#EF4444' : '#10B981' }]}>
+                {calculateStats.totalExpense > 0 || calculateStats.lastExpense > 0 ? Math.abs(calculateStats.expenseChange).toFixed(1) + '%' : '0%'}
+              </Text>
+            </View>
+            <Text style={styles.statsCardVs}>vs last month</Text>
+          </View>
+        </View>
       </View>
-      <Text style={styles.statsCardVs}>vs last month</Text>
-    </View>
-  </View>
-  <View style={styles.statsDivider} />
-  <View style={styles.statsCardRight}>
-    <Text style={styles.statsCardLabel}>Total Expense</Text>
-    <Text style={styles.statsCardAmount}>{getCurrencyCode()} {calculateStats.totalExpense.toLocaleString('en-EG')}</Text>
-    <View style={styles.statsCardTrendVertical}>
-      <View style={[styles.statsTrendChip, { backgroundColor: calculateStats.isExpenseUp ? '#EF444420' : '#10B98120' }]}>
-        <Feather name={calculateStats.isExpenseUp ? "arrow-up" : "arrow-down"} size={12} color={calculateStats.isExpenseUp ? '#EF4444' : '#10B981'} />
-        <Text style={[styles.statsTrendPercent, { color: calculateStats.isExpenseUp ? '#EF4444' : '#10B981' }]}>
-          {calculateStats.totalExpense > 0 || calculateStats.lastExpense > 0 ? Math.abs(calculateStats.expenseChange).toFixed(1) + '%' : '0%'}
-        </Text>
-      </View>
-      <Text style={styles.statsCardVs}>vs last month</Text>
-    </View>
-  </View>
-</View>
-     {/* DEBUG: Show month breakdown */}
-{(() => {
-  console.log("🔍 DEBUG - Current date:", new Date().toLocaleDateString());
-  console.log("🔍 DEBUG - Total transactions:", personalTransactions.length);
-  
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-  
-  const currentMonthTxs = personalTransactions.filter(tx => {
-    if (!tx.date) return false;
-    const d = new Date(tx.date);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  });
-  
-  const lastMonthTxs = personalTransactions.filter(tx => {
-    if (!tx.date) return false;
-    const d = new Date(tx.date);
-    return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
-  });
-  
-  console.log(`🔍 Current month (${currentMonth+1}/${currentYear}) transactions:`, currentMonthTxs.length);
-  console.log(`🔍 Last month (${lastMonth+1}/${lastMonthYear}) transactions:`, lastMonthTxs.length);
-  
-  if (lastMonthTxs.length > 0) {
-    console.log("🔍 Last month transactions:", lastMonthTxs.map(tx => ({ 
-      category: tx.category, 
-      date: new Date(tx.date).toLocaleDateString(),
-      amount: tx.amount 
-    })));
-  }
-  
-  return null;
-})()} 
-      {/* Transactions List */}
+      
+      {/* Transactions List with Edit/Delete */}
       {filteredTransactions.length === 0 ? (
         <View style={styles.noTransactionsCard}>
           <Feather name="credit-card" size={32} color="#9CA3AF" />
@@ -3619,21 +4686,83 @@ const renderTransactionsContent = () => {
         </View>
       ) : (
         <View style={styles.transactionsList}>
-          {filteredTransactions.map((tx) => (
-            <View key={tx.id} style={styles.recentTxItem}>
-              <View style={[styles.recentTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
-                <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={18} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
+          {filteredTransactions.map((tx) => {
+            const isEditing = editingTxId === tx.id;
+            
+            return (
+              <View key={tx.id} style={styles.transactionItemContainer}>
+                <View style={styles.recentTxItem}>
+                  <View style={[styles.recentTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
+                    <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={18} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
+                  </View>
+                  <View style={styles.recentTxInfo}>
+                    {isEditing ? (
+                      <View style={styles.editTxContainer}>
+                        <TextInput
+                          style={styles.editTxInput}
+                          value={editingTxValue}
+                          onChangeText={setEditingTxValue}
+                          autoFocus
+                          placeholder="Enter category"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <View style={styles.editTxActions}>
+                          <Pressable 
+                            onPress={() => {
+                              setEditingTxId(null);
+                              setEditingTxValue("");
+                            }} 
+                            style={[styles.editTxBtn, styles.editTxCancel]}
+                          >
+                            <Feather name="x" size={14} color="#6B7280" />
+                          </Pressable>
+                          <Pressable 
+                            onPress={() => {
+                              if (!editingTxValue.trim()) {
+                                Alert.alert("Error", "Category cannot be empty");
+                                return;
+                              }
+                              updateTransactionCategory(tx.id, editingTxValue);
+                            }} 
+                            style={[styles.editTxBtn, styles.editTxSave]}
+                          >
+                            <Feather name="check" size={14} color="#FFFFFF" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.recentTxCategory}>{tx.category}</Text>
+                    )}
+                    {tx.note ? <Text style={styles.recentTxNote} numberOfLines={1}>{tx.note}</Text> : null}
+                    <Text style={styles.recentTxDate}>{formatDate(tx.createdAt)}</Text>
+                  </View>
+                  <View style={styles.transactionActions}>
+                    <Text style={[styles.recentTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
+                      {tx.type === 'income' ? '+' : '-'} {getCurrencyCode()} {tx.amount.toLocaleString('en-EG')}
+                    </Text>
+                    <View style={styles.transactionActionButtons}>
+                      
+<Pressable 
+  onPress={() => {
+    setSelectedEditTransaction(tx);
+    setShowEditTransactionModal(true);
+  }} 
+  style={styles.transactionActionBtn}
+>
+  <Feather name="edit-2" size={14} color="#3B82F6" />
+</Pressable>
+                      <Pressable 
+                        onPress={() => deleteTransaction(tx.id, tx.category)} 
+                        style={styles.transactionActionBtn}
+                      >
+                        <Feather name="trash-2" size={14} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
               </View>
-              <View style={styles.recentTxInfo}>
-                <Text style={styles.recentTxCategory}>{tx.category}</Text>
-                {tx.note ? <Text style={styles.recentTxNote} numberOfLines={1}>{tx.note}</Text> : null}
-                <Text style={styles.recentTxDate}>{formatDate(tx.createdAt)}</Text>
-              </View>
-              <Text style={[styles.recentTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
-                {tx.type === 'income' ? '+' : '-'} {getCurrencyCode()} {tx.amount.toLocaleString('en-EG')}
-              </Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
       
@@ -3688,9 +4817,10 @@ const renderTransactionsContent = () => {
             
             <View style={styles.filterModalActions}>
               <Pressable 
-  onPress={() => setShowFilterModal(false)}  // ✅ Changed from setLocalShowFilter
-  style={[styles.filterModalBtn, { backgroundColor: '#F3F4F6' }]}
->                <Text style={[styles.filterModalBtnText, { color: '#6B7280' }]}>Cancel</Text>
+                onPress={() => setShowFilterModal(false)} 
+                style={[styles.filterModalBtn, { backgroundColor: '#F3F4F6' }]}
+              >
+                <Text style={[styles.filterModalBtnText, { color: '#6B7280' }]}>Cancel</Text>
               </Pressable>
               <Pressable 
                 onPress={() => {
@@ -3708,6 +4838,21 @@ const renderTransactionsContent = () => {
           </View>
         </View>
       </Modal>
+{/* Edit Transaction Modal */}
+<EditTransactionModal
+  visible={showEditTransactionModal}
+  onClose={() => {
+    setShowEditTransactionModal(false);
+    setSelectedEditTransaction(null);
+  }}
+  onSave={(data) => {
+    if (selectedEditTransaction) {
+      saveEditedTransaction(selectedEditTransaction.id, data);
+    }
+  }}
+  transaction={selectedEditTransaction}
+  loading={isSavingTransaction}
+/>
     </View>
   );
 };
@@ -3808,38 +4953,29 @@ const getCategoryColor = (category: string): string => {
   return colorMap[category] || '#6B7280';
 };
 
-// Replace the budget categories with expense categories from add-transaction
-// Remove the old BUDGET_CATEGORIES and use EXPENSE_CATEGORIES instead
-  // Render Budgets Page
-  // Render Budgets Page
-// Render Budgets Page
-// Render Budgets Page - WITH CATEGORIES FROM ADD-TRANSACTION
-// Render Budgets Page
+// ==================== RENDER BUDGETS CONTENT ====================
 const renderBudgetsContent = () => {
   const currencyCode = getCurrencyCode();
   
   // Use EXPENSE_CATEGORIES from add-transaction
-  // If EXPENSE_CATEGORIES is not available, use BUDGET_CATEGORIES as fallback
   let budgetCategories: { name: string; icon: string; color: string }[] = [];
   
   try {
     if (typeof EXPENSE_CATEGORIES !== 'undefined' && EXPENSE_CATEGORIES.length > 0) {
-      budgetCategories = EXPENSE_CATEGORIES.map(cat => ({
+      budgetCategories = EXPENSE_CATEGORIES.map((cat: string) => ({
         name: cat,
         icon: getCategoryIcon(cat),
         color: getCategoryColor(cat),
       }));
     } else {
-      // Fallback to BUDGET_CATEGORIES
-      budgetCategories = BUDGET_CATEGORIES.map(cat => ({
+      budgetCategories = BUDGET_CATEGORIES.map((cat: any) => ({
         name: cat.name,
         icon: cat.icon,
         color: cat.color,
       }));
     }
   } catch (e) {
-    // Ultimate fallback
-    budgetCategories = BUDGET_CATEGORIES.map(cat => ({
+    budgetCategories = BUDGET_CATEGORIES.map((cat: any) => ({
       name: cat.name,
       icon: cat.icon,
       color: cat.color,
@@ -3854,7 +4990,6 @@ const renderBudgetsContent = () => {
         const category = transaction.category?.toLowerCase() || "";
         const budgetCategory = budget.category.toLowerCase();
         
-        // Match transaction category with budget category
         if (category === budgetCategory || 
             category.includes(budgetCategory) || 
             budgetCategory.includes(category)) {
@@ -3899,28 +5034,26 @@ const renderBudgetsContent = () => {
         </View>
         
         <View style={styles.budgetRingChart}>
-  <Svg width={100} height={100} viewBox="0 0 100 100">
-    {/* Background circle */}
-    <Circle cx="50" cy="50" r="42" stroke="#E5E7EB" strokeWidth="8" fill="none" />
-    {/* Progress circle - GREEN */}
-    <Circle
-      cx="50"
-      cy="50"
-      r="42"
-      stroke="#22C55E"
-      strokeWidth="8"
-      fill="none"
-      strokeDasharray={`${2 * Math.PI * 42}`}
-      strokeDashoffset={`${2 * Math.PI * 42 * (1 - spentPercentage / 100)}`}
-      strokeLinecap="round"
-      transform="rotate(-90 50 50)"
-    />
-  </Svg>
-  <View style={styles.ringChartCenter}>
-    <Text style={styles.ringChartPercent}>{Math.round(spentPercentage)}%</Text>
-    <Text style={styles.ringChartLabel}>Spent</Text>
-  </View>
-</View>
+          <Svg width={100} height={100} viewBox="0 0 100 100">
+            <Circle cx="50" cy="50" r="42" stroke="#E5E7EB" strokeWidth="8" fill="none" />
+            <Circle
+              cx="50"
+              cy="50"
+              r="42"
+              stroke="#22C55E"
+              strokeWidth="8"
+              fill="none"
+              strokeDasharray={`${2 * Math.PI * 42}`}
+              strokeDashoffset={`${2 * Math.PI * 42 * (1 - spentPercentage / 100)}`}
+              strokeLinecap="round"
+              transform="rotate(-90 50 50)"
+            />
+          </Svg>
+          <View style={styles.ringChartCenter}>
+            <Text style={styles.ringChartPercent}>{Math.round(spentPercentage)}%</Text>
+            <Text style={styles.ringChartLabel}>Spent</Text>
+          </View>
+        </View>
       </View>
       
       {/* Budget Overview */}
@@ -3939,6 +5072,7 @@ const renderBudgetsContent = () => {
           activeBudgets.map((budget) => {
             const spentPercent = budget.budget > 0 ? (budget.spent / budget.budget) * 100 : 0;
             const isOverBudget = spentPercent > 100;
+            const isEditing = editingBudgetId === budget.id;
             
             return (
               <View key={budget.id} style={styles.budgetItem}>
@@ -3949,14 +5083,71 @@ const renderBudgetsContent = () => {
                     </View>
                     <View>
                       <Text style={styles.budgetItemName}>{budget.category}</Text>
-                      <Text style={styles.budgetItemSpent}>
-                        {currencyCode}{budget.spent.toLocaleString()} / {currencyCode}{budget.budget.toLocaleString()}
-                      </Text>
+                      {isEditing ? (
+                        <View style={styles.editBudgetContainer}>
+                          <TextInput
+                            style={styles.editBudgetInput}
+                            value={editingBudgetAmount}
+                            onChangeText={setEditingBudgetAmount}
+                            keyboardType="numeric"
+                            autoFocus
+                            placeholder="Enter amount"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                          <View style={styles.editBudgetActions}>
+                            <Pressable 
+                              onPress={() => {
+                                setEditingBudgetId(null);
+                                setEditingBudgetAmount("");
+                              }} 
+                              style={[styles.editBudgetBtn, styles.editBudgetCancel]}
+                            >
+                              <Feather name="x" size={14} color="#6B7280" />
+                            </Pressable>
+                            <Pressable 
+                              onPress={() => {
+                                const amount = parseFloat(editingBudgetAmount);
+                                if (isNaN(amount) || amount <= 0) {
+                                  Alert.alert("Error", "Please enter a valid amount");
+                                  return;
+                                }
+                                updateBudget(budget.id, amount);
+                              }} 
+                              style={[styles.editBudgetBtn, styles.editBudgetSave]}
+                            >
+                              <Feather name="check" size={14} color="#FFFFFF" />
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={styles.budgetItemSpent}>
+                          {currencyCode}{budget.spent.toLocaleString()} / {currencyCode}{budget.budget.toLocaleString()}
+                        </Text>
+                      )}
                     </View>
                   </View>
-                  <Text style={[styles.budgetItemPercent, { color: isOverBudget ? '#EF4444' : '#10B981' }]}>
-                    {Math.round(spentPercent)}%
-                  </Text>
+                  <View style={styles.budgetItemRight}>
+                    <Text style={[styles.budgetItemPercent, { color: isOverBudget ? '#EF4444' : '#10B981' }]}>
+                      {Math.round(spentPercent)}%
+                    </Text>
+                    <View style={styles.budgetActionButtons}>
+                      <Pressable 
+  onPress={() => {
+    setSelectedEditBudget(budget);
+    setShowEditBudgetModal(true);
+  }} 
+  style={styles.budgetActionBtn}
+>
+  <Feather name="edit-2" size={14} color="#3B82F6" />
+</Pressable>
+                      <Pressable 
+                        onPress={() => deleteBudget(budget.id, budget.category)} 
+                        style={styles.budgetActionBtn}
+                      >
+                        <Feather name="trash-2" size={14} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  </View>
                 </View>
                 <View style={styles.budgetProgressBar}>
                   <View style={[styles.budgetProgressFill, { width: `${Math.min(spentPercent, 100)}%`, backgroundColor: isOverBudget ? '#EF4444' : budget.color }]} />
@@ -4017,19 +5208,29 @@ const renderBudgetsContent = () => {
           </View>
         </View>
       </Modal>
+{/* Edit Budget Modal */}
+<EditBudgetModal
+  visible={showEditBudgetModal}
+  onClose={() => {
+    setShowEditBudgetModal(false);
+    setSelectedEditBudget(null);
+  }}
+  onSave={(budgetId, amount) => {
+    saveBudgetAmount(budgetId, amount);
+  }}
+  budget={selectedEditBudget}
+  loading={isSavingBudget}
+/>
     </View>
   );
 };
-// Render Goals Page
-// Render Goals Page - WITH SAVINGS TRACKING
+// ==================== RENDER GOALS CONTENT ====================
 const renderGoalsContent = () => {
   const currencyCode = getCurrencyCode();
   
-  // Use goals directly from state (savedAmount is already updated)
+  // Use goals directly from state
   const filteredGoals = goals.filter(g => g.status === selectedGoalTab);
   const totalGoals = goals.length;
-  const totalActiveGoals = goals.filter(g => g.status === "active").length;
-  const totalCompletedGoals = goals.filter(g => g.status === "completed").length;
   const totalSaved = goals.reduce((sum, g) => sum + g.savedAmount, 0);
   
   const goalIcons = [
@@ -4050,6 +5251,7 @@ const renderGoalsContent = () => {
         <View style={{ width: 40 }} />
       </View>
       
+      {/* Stats Row */}
       <View style={styles.goalsStatsRow}>
         <View style={[styles.goalStatCard, styles.goalStatCardLeft]}>
           <Feather name="target" size={20} color="#FFFFFF" style={styles.goalStatIcon} />
@@ -4061,6 +5263,22 @@ const renderGoalsContent = () => {
           <Text style={styles.goalStatLabel}>Total Saved</Text>
           <Text style={styles.goalStatAmount}>{currencyCode}{totalSaved.toLocaleString()}</Text>
         </View>
+      </View>
+      
+      {/* Tab Selector */}
+      <View style={styles.goalTabsContainer}>
+        <Pressable 
+          onPress={() => setSelectedGoalTab("active")}
+          style={[styles.goalTab, selectedGoalTab === "active" && styles.goalTabActive]}
+        >
+          <Text style={[styles.goalTabText, selectedGoalTab === "active" && styles.goalTabTextActive]}>Active</Text>
+        </Pressable>
+        <Pressable 
+          onPress={() => setSelectedGoalTab("completed")}
+          style={[styles.goalTab, selectedGoalTab === "completed" && styles.goalTabActive]}
+        >
+          <Text style={[styles.goalTabText, selectedGoalTab === "completed" && styles.goalTabTextActive]}>Completed</Text>
+        </Pressable>
       </View>
             
       {filteredGoals.length === 0 ? (
@@ -4074,24 +5292,96 @@ const renderGoalsContent = () => {
           {filteredGoals.map((goal) => {
             const progress = (goal.savedAmount / goal.targetAmount) * 100;
             const isCompleted = progress >= 100;
+            const isEditing = editingGoalId === goal.id;
             
             return (
-              <Pressable key={goal.id} onLongPress={() => deleteGoal(goal.id)} style={styles.goalCard}>
+              <View key={goal.id} style={styles.goalCard}>
                 <View style={styles.goalCardHeader}>
                   <View style={[styles.goalCardIcon, { backgroundColor: goal.color + '15' }]}>
                     <Feather name={goal.icon as any} size={20} color={goal.color} />
                   </View>
                   <View style={styles.goalCardInfo}>
-                    <Text style={styles.goalCardName}>{goal.name}</Text>
-                    <Text style={styles.goalCardAmount}>
-                      {currencyCode}{goal.savedAmount.toLocaleString()} / {currencyCode}{goal.targetAmount.toLocaleString()}
-                    </Text>
-                    {goal.deadline && (
-                      <Text style={styles.goalCardDeadline}><Feather name="calendar" size={8} color="#9CA3AF" /> {goal.deadline}</Text>
+                    {isEditing ? (
+                      <View style={styles.editGoalContainer}>
+                        <TextInput
+                          style={styles.editGoalNameInput}
+                          value={editingGoalName}
+                          onChangeText={setEditingGoalName}
+                          autoFocus
+                          placeholder="Goal name"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <TextInput
+                          style={styles.editGoalTargetInput}
+                          value={editingGoalTarget}
+                          onChangeText={setEditingGoalTarget}
+                          keyboardType="numeric"
+                          placeholder="Target"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                        <View style={styles.editGoalActions}>
+                          <Pressable 
+                            onPress={() => {
+                              setEditingGoalId(null);
+                              setEditingGoalName("");
+                              setEditingGoalTarget("");
+                            }} 
+                            style={[styles.editGoalBtn, styles.editGoalCancel]}
+                          >
+                            <Feather name="x" size={14} color="#6B7280" />
+                          </Pressable>
+                          <Pressable 
+                            onPress={() => {
+                              const target = parseFloat(editingGoalTarget);
+                              if (isNaN(target) || target <= 0) {
+                                Alert.alert("Error", "Please enter a valid target amount");
+                                return;
+                              }
+                              updateGoal(goal.id, editingGoalName, target);
+                            }} 
+                            style={[styles.editGoalBtn, styles.editGoalSave]}
+                          >
+                            <Feather name="check" size={14} color="#FFFFFF" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.goalCardName}>{goal.name}</Text>
+                        <Text style={styles.goalCardAmount}>
+                          {currencyCode}{goal.savedAmount.toLocaleString()} / {currencyCode}{goal.targetAmount.toLocaleString()}
+                        </Text>
+                        {goal.deadline && (
+                          <Text style={styles.goalCardDeadline}>
+                            <Feather name="calendar" size={8} color="#9CA3AF" /> {goal.deadline}
+                          </Text>
+                        )}
+                      </>
                     )}
                   </View>
-                  <View style={[styles.goalProgressChip, { backgroundColor: isCompleted ? '#10B98115' : goal.color + '15' }]}>
-                    <Text style={[styles.goalProgressText, { color: isCompleted ? '#10B981' : goal.color }]}>{Math.round(progress)}%</Text>
+                  <View style={styles.goalCardRight}>
+                    <View style={[styles.goalProgressChip, { backgroundColor: isCompleted ? '#10B98115' : goal.color + '15' }]}>
+                      <Text style={[styles.goalProgressText, { color: isCompleted ? '#10B981' : goal.color }]}>
+                        {Math.round(progress)}%
+                      </Text>
+                    </View>
+                    <View style={styles.goalActionButtons}>
+                      <Pressable 
+  onPress={() => {
+    setSelectedEditGoal(goal);
+    setShowEditGoalModal(true);
+  }} 
+  style={styles.goalActionBtn}
+>
+  <Feather name="edit-2" size={14} color="#3B82F6" />
+</Pressable>
+                      <Pressable 
+                        onPress={() => deleteGoal(goal.id, goal.name)} 
+                        style={styles.goalActionBtn}
+                      >
+                        <Feather name="trash-2" size={14} color="#EF4444" />
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
                 <View style={styles.goalProgressBar}>
@@ -4103,12 +5393,13 @@ const renderGoalsContent = () => {
                     <Text style={styles.goalCompletedText}>Completed!</Text>
                   </View>
                 )}
-              </Pressable>
+              </View>
             );
           })}
         </View>
       )}
       
+      {/* Add Goal FAB */}
       <Pressable onPress={() => setShowAddGoalModal(true)} style={styles.goalFabButton}>
         <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.goalFabGradient}>
           <Feather name="plus" size={24} color="#FFFFFF" />
@@ -4199,9 +5490,23 @@ const renderGoalsContent = () => {
           </View>
         </View>
       </Modal>
+{/* Edit Goal Modal */}
+<EditGoalModal
+  visible={showEditGoalModal}
+  onClose={() => {
+    setShowEditGoalModal(false);
+    setSelectedEditGoal(null);
+  }}
+  onSave={(goalId, name, targetAmount) => {
+    saveGoalDetails(goalId, name, targetAmount);
+  }}
+  goal={selectedEditGoal}
+  loading={isSavingGoal}
+/>
     </View>
   );
 };
+// ==================== RENDER DOCS CONTENT ====================
 const renderDocsContent = () => {
   const FILTERS: FilterType[] = ["All", "Invoice", "Quote", "Credit Note", "Purchase Order"];
   const INVOICE_STATUS_FILTERS: { id: DocumentStatus; label: string }[] = [
@@ -4216,7 +5521,7 @@ const renderDocsContent = () => {
     "Credit Note": { icon: "credit-card", color: "#8B5CF6" },
     "Purchase Order": { icon: "package", color: "#EC4899" },
   };
-  
+
   // Get counts for each type
   const getCountForType = (type: FilterType) => {
     if (type === "All") return documentsList.length;
@@ -4232,22 +5537,10 @@ const renderDocsContent = () => {
     return 0;
   };
   
-  // ✅ NO useMemo here - use the top-level filteredDocs
-  
-  // Handle document type selection
-  const handleSelectType = (type: string) => {
-    setShowCreateDocumentModal(false);
-    router.push({
-      pathname: "/create-document",
-      params: { type: type.toLowerCase().replace(/\s/g, "-") }
-    });
-  };
-  
-  // Handle AI generation
-  const handleAIGenerate = () => {
-    setShowCreateDocumentModal(false);
-    router.push("/ai-document-chat");
-  };
+  // Calculate totals for the form
+  const subtotal = createItems.reduce((sum, item) => sum + (item.total || 0), 0);
+  const tax = subtotal * (createTaxRate / 100);
+  const total = subtotal + tax;
   
   // Document Icon Component
   const DocumentIcon = ({ type, size = 40 }: { type: string; size?: number }) => {
@@ -4316,29 +5609,42 @@ const renderDocsContent = () => {
   };
   
   // Document Card Component
-  const DocumentCard = ({ document, onPress, onDownload }: { document: Document; onPress: () => void; onDownload: () => void }) => {
-    const book = books.find(b => b.id === document.bookId);
-    return (
-      <Pressable onPress={onPress} style={styles.docCard}>
-        <DocumentIcon type={document.type} size={44} />
-        <View style={styles.docCardContent}>
-          <Text style={styles.docCardNumber} numberOfLines={1}>{document.number}</Text>
-          <Text style={styles.docCardParty} numberOfLines={1}>{document.partyName}</Text>
-          {book && (
-            <Text style={styles.docCardBook} numberOfLines={1}>📁 {book.name}</Text>
-          )}
-        </View>
-        <View style={styles.docCardBadgeContainer}>
-          <DocumentTypeBadge type={document.type} />
-          {document.type === "Invoice" && <InvoiceStatusBadge document={document} />}
-          <Pressable onPress={onDownload} style={styles.docDownloadBtn}>
-            <Feather name="download" size={16} color="#3B82F6" />
-          </Pressable>
-        </View>
-      </Pressable>
-    );
-  };
+  // Document Card Component with Edit/Delete
+// Document Card Component
+const DocumentCard = ({ document, onPress, onDownload }: { document: Document; onPress: () => void; onDownload: () => void }) => {
+  const book = books.find(b => b.id === document.bookId);
   
+  return (
+    <View style={styles.docCard}>
+      <DocumentIcon type={document.type} size={44} />
+      <View style={styles.docCardContent}>
+        <Text style={styles.docCardNumber} numberOfLines={1}>{document.number}</Text>
+        <Text style={styles.docCardParty} numberOfLines={1}>{document.partyName}</Text>
+        {book && (
+          <Text style={styles.docCardBook} numberOfLines={1}>📁 {book.name}</Text>
+        )}
+      </View>
+      <View style={styles.docCardBadgeContainer}>
+        <DocumentTypeBadge type={document.type} />
+        {document.type === "Invoice" && <InvoiceStatusBadge document={document} />}
+        {/* ✅ Edit Button */}
+        <Pressable 
+          onPress={() => {
+            setSelectedEditDocument(document);
+            setShowEditDocumentModal(true);
+          }} 
+          style={styles.docEditBtn}
+        >
+          <Feather name="edit-2" size={16} color="#3B82F6" />
+        </Pressable>
+        <Pressable onPress={onDownload} style={styles.docDownloadBtn}>
+          <Feather name="download" size={16} color="#3B82F6" />
+        </Pressable>
+      </View>
+    </View>
+  );
+};
+
   return (
     <>
       {/* Documents Hub Title Section */}
@@ -4347,7 +5653,10 @@ const renderDocsContent = () => {
           <Text style={styles.docsHubTitle}>Documents Hub</Text>
           <Text style={styles.docsHubSubtitle}>{documentsList.length} docs • AI-assisted creation</Text>
         </View>
-        <Pressable onPress={() => setShowCreateDocumentModal(true)} style={styles.createDocBtn}>
+        <Pressable onPress={() => {
+          resetDocumentForm();
+          setShowCreateDocumentModal(true);
+        }} style={styles.createDocBtn}>
           <Feather name="plus" size={18} color="#FFFFFF" />
           <Text style={styles.createDocBtnText}>Create Document</Text>
         </Pressable>
@@ -4409,13 +5718,16 @@ const renderDocsContent = () => {
         ))}
       </ScrollView>
       
-      {/* Documents List - ✅ Use the top-level filteredDocs */}
+      {/* Documents List */}
       {filteredDocs.length === 0 ? (
         <View style={styles.docsEmptyState}>
           <Feather name="file-text" size={48} color="#D1D5DB" />
           <Text style={styles.docsEmptyTitle}>No document yet</Text>
           <Text style={styles.docsEmptyText}>Generate your first one with AI or start from a blank template</Text>
-          <Pressable onPress={() => setShowCreateDocumentModal(true)} style={styles.docsEmptyBtn}>
+          <Pressable onPress={() => {
+            resetDocumentForm();
+            setShowCreateDocumentModal(true);
+          }} style={styles.docsEmptyBtn}>
             <Text style={styles.docsEmptyBtnText}>Create Document</Text>
           </Pressable>
         </View>
@@ -4435,56 +5747,296 @@ const renderDocsContent = () => {
         </View>
       )}
       
-      {/* Create Document Modal */}
-      <Modal visible={showCreateDocumentModal} transparent animationType="slide" onRequestClose={() => setShowCreateDocumentModal(false)}>
+      {/* ==================== CREATE DOCUMENT MODAL ==================== */}
+      <Modal visible={showCreateDocumentModal} transparent animationType="slide" onRequestClose={() => {
+        setShowCreateDocumentModal(false);
+        resetDocumentForm();
+      }}>
         <View style={styles.modalContainer}>
-          <View style={[styles.modalContentFull, { backgroundColor: "#FFFFFF" }]}>
+          <View style={[styles.modalContentFull, { backgroundColor: "#FFFFFF", maxHeight: "95%" }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Document</Text>
-              <Pressable onPress={() => setShowCreateDocumentModal(false)} hitSlop={8}>
+              <Pressable onPress={() => {
+                setShowCreateDocumentModal(false);
+                resetDocumentForm();
+              }} hitSlop={8}>
                 <Feather name="x" size={24} color="#000" />
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Generate with AI Option */}
-              <Pressable onPress={handleAIGenerate} style={styles.aiGenerateOption}>
-                <View style={styles.aiContent}>
-                  <View>
-                    <Text style={styles.aiTitle}>Generate with AI</Text>
-                    <Text style={styles.aiSubtitle}>Create any document using text or voice</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+              {/* Document Type Selector - Only show initially */}
+              {showTypeSelector ? (
+                <>
+                  <Text style={styles.formLabel}>Select Document Type</Text>
+                  <View style={styles.docTypeGrid}>
+                    {Object.keys(DOCUMENT_CONFIG).map((type) => (
+                      <Pressable
+                        key={type}
+                        onPress={() => {
+                          setCreateDocType(type as any);
+                          setShowTypeSelector(false);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                        style={[
+                          styles.docTypeOption,
+                          { backgroundColor: DOCUMENT_CONFIG[type].color + "10" }
+                        ]}
+                      >
+                        <View style={[styles.docTypeIcon, { backgroundColor: DOCUMENT_CONFIG[type].color + "20" }]}>
+                          <Feather name={DOCUMENT_CONFIG[type].icon as any} size={24} color={DOCUMENT_CONFIG[type].color} />
+                        </View>
+                        <Text style={styles.docTypeName}>{type}</Text>
+                      </Pressable>
+                    ))}
                   </View>
-                  <View style={styles.aiRobotIcon}>
-                    <Image 
-                      source={{ uri: "https://i.ibb.co/N6YschDX/Gemini-Generated-Image-aua6dsaua6dsaua6.png" }}
-                      style={styles.aiRobotImage}
-                      resizeMode="contain"
-                    />
+                  
+                  <Pressable 
+                    onPress={() => {
+                      Alert.alert("AI Generation", "AI document generation coming soon!");
+                    }} 
+                    style={styles.aiGenerateOption}
+                  >
+                    <View style={styles.aiContent}>
+                      <View>
+                        <Text style={styles.aiTitle}>Generate with AI</Text>
+                        <Text style={styles.aiSubtitle}>Create any document using AI</Text>
+                      </View>
+                      <View style={styles.aiRobotIcon}>
+                        <Image 
+                          source={{ uri: "https://i.ibb.co/N6YschDX/Gemini-Generated-Image-aua6dsaua6dsaua6.png" }}
+                          style={styles.aiRobotImage}
+                          resizeMode="contain"
+                        />
+                      </View>
+                    </View>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  {/* Back to type selector */}
+                  <Pressable 
+                    onPress={() => setShowTypeSelector(true)} 
+                    style={styles.backToTypeBtn}
+                  >
+                    <Feather name="chevron-left" size={16} color="#3B82F6" />
+                    <Text style={styles.backToTypeBtnText}>Change Document Type</Text>
+                  </Pressable>
+                  
+                  {/* Document Type Badge */}
+                  <View style={[styles.docTypeBadge, { backgroundColor: DOCUMENT_CONFIG[createDocType].color + "15" }]}>
+                    <Feather name={DOCUMENT_CONFIG[createDocType].icon as any} size={16} color={DOCUMENT_CONFIG[createDocType].color} />
+                    <Text style={[styles.docTypeBadgeText, { color: DOCUMENT_CONFIG[createDocType].color }]}>
+                      {createDocType}
+                    </Text>
                   </View>
-                </View>
-              </Pressable>
 
-              {/* OR Divider */}
-              <View style={styles.divider}>
-                <View style={[styles.dividerLine, { backgroundColor: "#E5E7EB" }]} />
-                <Text style={[styles.dividerText, { color: "#9CA3AF" }]}>OR CHOOSE DOCUMENT TYPE</Text>
-                <View style={[styles.dividerLine, { backgroundColor: "#E5E7EB" }]} />
-              </View>
-
-              {/* Document Type Options */}
-              {Object.keys(DOCUMENT_CONFIG).map((type) => (
-                <Pressable 
-                  key={type} 
-                  onPress={() => handleSelectType(type)} 
-                  style={styles.typeOptionRow}
-                >
-                  <View style={[styles.typeOptionIconRow, { backgroundColor: DOCUMENT_CONFIG[type].color + "15" }]}>
-                    <Feather name={DOCUMENT_CONFIG[type].icon as any} size={24} color={DOCUMENT_CONFIG[type].color} />
+                  {/* Document Number */}
+                  <Text style={styles.formLabel}>Document No.</Text>
+                  <View style={styles.autoGeneratedField}>
+                    <Text style={styles.autoGeneratedText}>{getDocumentNumber()}</Text>
+                    <Text style={styles.autoGeneratedBadge}>Auto-generated</Text>
                   </View>
-                  <Text style={styles.typeOptionTextRow}>{type}</Text>
-                  <Feather name="chevron-right" size={20} color="#9CA3AF" />
-                </Pressable>
-              ))}
+
+                  {/* Party Name */}
+                  <Text style={styles.formLabel}>Party Name *</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="Enter party name"
+                    placeholderTextColor="#9CA3AF"
+                    value={createPartyName}
+                    onChangeText={setCreatePartyName}
+                  />
+
+                  {/* Document Date */}
+                  <Text style={styles.formLabel}>Document Date</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9CA3AF"
+                    value={createDocDate}
+                    onChangeText={setCreateDocDate}
+                  />
+
+                  {/* Due Date */}
+                  <Text style={styles.formLabel}>Due Date</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9CA3AF"
+                    value={createDueDate}
+                    onChangeText={setCreateDueDate}
+                  />
+
+                  {/* Invoice Status - Only for Invoice */}
+                  {createDocType === "Invoice" && (
+                    <>
+                      <Text style={styles.formLabel}>Invoice Status</Text>
+                      <View style={styles.statusSelectorContainer}>
+                        <Pressable
+                          onPress={() => setCreateInvoiceStatus("paid")}
+                          style={[
+                            styles.statusOption,
+                            createInvoiceStatus === "paid" && styles.statusOptionPaidActive,
+                          ]}
+                        >
+                          <View style={[
+                            styles.statusDot,
+                            { backgroundColor: createInvoiceStatus === "paid" ? "#10B981" : "#D1D5DB" }
+                          ]} />
+                          <Text style={[
+                            styles.statusOptionText,
+                            createInvoiceStatus === "paid" && styles.statusOptionTextActive,
+                          ]}>Paid</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setCreateInvoiceStatus("unpaid")}
+                          style={[
+                            styles.statusOption,
+                            createInvoiceStatus === "unpaid" && styles.statusOptionUnpaidActive,
+                          ]}
+                        >
+                          <View style={[
+                            styles.statusDot,
+                            { backgroundColor: createInvoiceStatus === "unpaid" ? "#EF4444" : "#D1D5DB" }
+                          ]} />
+                          <Text style={[
+                            styles.statusOptionText,
+                            createInvoiceStatus === "unpaid" && styles.statusOptionTextActive,
+                          ]}>Unpaid</Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  )}
+
+                  {/* Reference No and Order No - Credit Note, Purchase Order, Quote */}
+                  {["Credit Note", "Purchase Order", "Quote"].includes(createDocType) && (
+                    <>
+                      <Text style={styles.formLabel}>Reference No.</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="Enter reference number"
+                        placeholderTextColor="#9CA3AF"
+                        value={createReferenceNo}
+                        onChangeText={setCreateReferenceNo}
+                      />
+
+                      <Text style={styles.formLabel}>Order No.</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="Enter order number"
+                        placeholderTextColor="#9CA3AF"
+                        value={createOrderNo}
+                        onChangeText={setCreateOrderNo}
+                      />
+                    </>
+                  )}
+
+                  {/* Items Section */}
+                  <View style={styles.itemsHeader}>
+                    <Text style={styles.formLabel}>Items</Text>
+                    <Pressable onPress={addDocItem} style={styles.addItemBtn}>
+                      <Feather name="plus" size={16} color="#3B82F6" />
+                      <Text style={styles.addItemBtnText}>Add Item</Text>
+                    </Pressable>
+                  </View>
+
+                  {createItems.length === 0 ? (
+                    <View style={styles.emptyItems}>
+                      <Text style={styles.emptyItemsText}>No items added</Text>
+                    </View>
+                  ) : (
+                    createItems.map((item) => (
+                      <View key={item.id} style={styles.itemCard}>
+                        <View style={styles.itemHeader}>
+                          <TextInput
+                            style={styles.itemNameInput}
+                            placeholder="Item name"
+                            placeholderTextColor="#9CA3AF"
+                            value={item.name}
+                            onChangeText={(text) => updateDocItem(item.id, 'name', text)}
+                          />
+                          <Pressable onPress={() => removeDocItem(item.id)}>
+                            <Feather name="trash-2" size={16} color="#EF4444" />
+                          </Pressable>
+                        </View>
+                        <View style={styles.itemRow}>
+                          <View style={styles.itemQty}>
+                            <Text style={styles.itemLabel}>Qty</Text>
+                            <TextInput
+                              style={styles.qtyInput}
+                              keyboardType="numeric"
+                              value={item.quantity.toString()}
+                              onChangeText={(text) => updateDocItem(item.id, 'quantity', Number(text) || 0)}
+                            />
+                          </View>
+                          <View style={styles.itemPrice}>
+                            <Text style={styles.itemLabel}>Price</Text>
+                            <TextInput
+                              style={styles.priceInput}
+                              keyboardType="numeric"
+                              value={item.price.toString()}
+                              onChangeText={(text) => updateDocItem(item.id, 'price', Number(text) || 0)}
+                            />
+                          </View>
+                          <View style={styles.itemTotal}>
+                            <Text style={styles.itemLabel}>Total</Text>
+                            <Text style={styles.totalText}>{formatAmount(item.total)}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  {/* Totals Section */}
+                  {createItems.length > 0 && (
+                    <View style={styles.totalsSection}>
+                      <View style={styles.totalRow}>
+                        <Text style={styles.totalLabel}>Subtotal</Text>
+                        <Text>{formatAmount(subtotal)}</Text>
+                      </View>
+                      <View style={styles.totalRow}>
+                        <Text style={styles.totalLabel}>Tax ({createTaxRate}%)</Text>
+                        <Text>{formatAmount(tax)}</Text>
+                      </View>
+                      <View style={[styles.totalRow, styles.grandTotal]}>
+                        <Text style={styles.grandTotalLabel}>Total</Text>
+                        <Text style={styles.grandTotalAmount}>{formatAmount(total)}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Notes */}
+                  <Text style={styles.formLabel}>Notes</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.notesTextArea]}
+                    placeholder="Additional notes..."
+                    placeholderTextColor="#9CA3AF"
+                    value={createNotes}
+                    onChangeText={setCreateNotes}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  {/* Submit Button */}
+                  <Pressable
+                    onPress={saveDocument}
+                    disabled={isSubmittingDoc}
+                    style={[styles.submitBtn, isSubmittingDoc && styles.submitBtnDisabled]}
+                  >
+                    <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.submitGradient}>
+                      {isSubmittingDoc ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <>
+                          <Feather name="check" size={18} color="#FFF" />
+                          <Text style={styles.submitBtnText}>Create {createDocType}</Text>
+                        </>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
+                </>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -4587,10 +6139,25 @@ const renderDocsContent = () => {
           </View>
         )}
       </Modal>
+<EditDocumentModal
+        visible={showEditDocumentModal}
+        onClose={() => {
+          setShowEditDocumentModal(false);
+          setSelectedEditDocument(null);
+        }}
+        onSave={(field, value) => {
+          if (selectedEditDocument) {
+            saveDocumentField(selectedEditDocument.id, field, value);
+          }
+        }}
+        document={selectedEditDocument}
+        loading={isSavingDocument}
+      />
     </>
   );
 };
 // Render Clients Page (Business) - NO HOOKS INSIDE
+// Render Clients Page (Business)
 const renderClientsContent = () => {
   // Client Card Component
   const ClientCard = ({ client }: { client: Client }) => (
@@ -4716,6 +6283,7 @@ const renderClientsContent = () => {
             </View>
             
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Name */}
               <Text style={styles.formLabel}>Name *</Text>
               <TextInput
                 style={styles.formInput}
@@ -4725,6 +6293,7 @@ const renderClientsContent = () => {
                 onChangeText={setClientFormName}
               />
               
+              {/* Company */}
               <Text style={styles.formLabel}>Company</Text>
               <TextInput
                 style={styles.formInput}
@@ -4734,6 +6303,7 @@ const renderClientsContent = () => {
                 onChangeText={setClientFormCompany}
               />
               
+              {/* Email */}
               <Text style={styles.formLabel}>Email</Text>
               <TextInput
                 style={styles.formInput}
@@ -4745,16 +6315,38 @@ const renderClientsContent = () => {
                 autoCapitalize="none"
               />
               
+              {/* Phone with Country Code Selector */}
               <Text style={styles.formLabel}>Phone</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="+1 234 567 8900"
-                placeholderTextColor="#9CA3AF"
-                value={clientFormPhone}
-                onChangeText={setClientFormPhone}
-                keyboardType="phone-pad"
-              />
+              <View style={styles.phoneInputContainer}>
+                {/* Country Code Selector */}
+                <Pressable 
+                  onPress={() => {
+                    console.log("🔵 Opening country picker");
+                    setShowClientCountryPicker(true);
+                  }} 
+                  style={[styles.countryCodeSelector, { borderColor: '#E5E7EB' }]}
+                >
+                  <Text style={styles.countryFlag}>{currentClientCountry.flag}</Text>
+                  <Text style={[styles.countryCodeText, { color: '#111827' }]}>{currentClientCountry.code}</Text>
+                  <Feather name="chevron-down" size={16} color="#6B7280" />
+                </Pressable>
+                
+                {/* Phone Number Input */}
+                <TextInput
+                  style={[styles.phoneInput, { 
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E5E7EB',
+                    color: '#111827'
+                  }]}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="#9CA3AF"
+                  value={clientFormPhone}
+                  onChangeText={setClientFormPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
               
+              {/* Currency */}
               <Text style={styles.formLabel}>Currency</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
                 {CURRENCIES.map((curr) => (
@@ -4768,6 +6360,7 @@ const renderClientsContent = () => {
                 ))}
               </ScrollView>
               
+              {/* Payment Terms */}
               <Text style={styles.formLabel}>Payment Terms</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
                 {PAYMENT_TERMS.map((term) => (
@@ -4781,6 +6374,7 @@ const renderClientsContent = () => {
                 ))}
               </ScrollView>
               
+              {/* Tax ID / VAT */}
               <Text style={styles.formLabel}>Tax ID / VAT</Text>
               <TextInput
                 style={styles.formInput}
@@ -4790,6 +6384,7 @@ const renderClientsContent = () => {
                 onChangeText={setClientFormTaxId}
               />
               
+              {/* Internal Notes */}
               <Text style={styles.formLabel}>Internal Notes</Text>
               <TextInput
                 style={[styles.formInput, styles.formTextArea]}
@@ -4801,6 +6396,7 @@ const renderClientsContent = () => {
                 numberOfLines={3}
               />
               
+              {/* Status */}
               <Text style={styles.formLabel}>Status</Text>
               <View style={styles.statusPickerRow}>
                 <Pressable
@@ -4819,27 +6415,86 @@ const renderClientsContent = () => {
                 </Pressable>
               </View>
               
-              // In renderClientsContent, the submit button should call saveClient:
-{/* In renderClientsContent, the submit button should call saveClient: */}
-<Pressable
-  onPress={() => {
-    console.log("🔵🔵🔵 BUTTON CLICKED INSIDE PRESSABLE 🔵🔵🔵");
-    saveClient();
-  }}
-  disabled={isSubmittingClient}
-  style={[styles.submitBtn, isSubmittingClient && styles.submitBtnDisabled]}
->
-  <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.submitGradient}>
-    {isSubmittingClient ? (
-      <ActivityIndicator size="small" color="#FFF" />
-    ) : (
-      <>
-        <Feather name="check" size={18} color="#FFF" />
-        <Text style={styles.submitBtnText}>{isEditingClient ? "Update Client" : "Create Client"}</Text>
-      </>
-    )}
-  </LinearGradient>
-</Pressable>
+              {/* Country Picker Modal - INSIDE the client modal */}
+              <Modal 
+                visible={showClientCountryPicker} 
+                transparent 
+                animationType="slide" 
+                onRequestClose={() => setShowClientCountryPicker(false)}
+              >
+                <View style={styles.countryPickerOverlay}>
+                  <View style={[styles.countryPickerModal, { backgroundColor: '#FFFFFF' }]}>
+                    <View style={styles.countryPickerHeader}>
+                      <Text style={[styles.countryPickerTitle, { color: '#111827', fontFamily: "Inter_600SemiBold" }]}>
+                        Select Country
+                      </Text>
+                      <Pressable onPress={() => setShowClientCountryPicker(false)} hitSlop={8}>
+                        <Feather name="x" size={24} color="#6B7280" />
+                      </Pressable>
+                    </View>
+                    
+                    {/* Search Input */}
+                    <View style={[styles.countrySearchContainer, { borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }]}>
+                      <Feather name="search" size={18} color="#6B7280" />
+                      <TextInput 
+                        style={[styles.countrySearchInput, { color: '#111827' }]} 
+                        placeholder="Search countries..." 
+                        placeholderTextColor="#9CA3AF" 
+                        value={searchClientCountry} 
+                        onChangeText={setSearchClientCountry} 
+                      />
+                    </View>
+                    
+                    <ScrollView style={styles.countryList} showsVerticalScrollIndicator={false}>
+                      {filteredClientCountries.map((country) => (
+                        <Pressable
+                          key={country.code}
+                          onPress={() => {
+                            setClientCountryCode(country.code);
+                            setShowClientCountryPicker(false);
+                            setSearchClientCountry('');
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }}
+                          style={[
+                            styles.countryItem,
+                            clientCountryCode === country.code && { backgroundColor: '#3B82F6' + '15' }
+                          ]}
+                        >
+                          <Text style={styles.countryItemFlag}>{country.flag}</Text>
+                          <View style={styles.countryItemInfo}>
+                            <Text style={[styles.countryItemName, { color: '#111827' }]}>{country.name}</Text>
+                            <Text style={[styles.countryItemCode, { color: '#6B7280' }]}>{country.code}</Text>
+                          </View>
+                          {clientCountryCode === country.code && (
+                            <Feather name="check" size={18} color="#3B82F6" />
+                          )}
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </View>
+              </Modal>
+              
+              {/* Submit Button */}
+              <Pressable
+                onPress={() => {
+                  console.log("🔵🔵🔵 BUTTON CLICKED INSIDE PRESSABLE 🔵🔵🔵");
+                  saveClient();
+                }}
+                disabled={isSubmittingClient}
+                style={[styles.submitBtn, isSubmittingClient && styles.submitBtnDisabled]}
+              >
+                <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.submitGradient}>
+                  {isSubmittingClient ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Feather name="check" size={18} color="#FFF" />
+                      <Text style={styles.submitBtnText}>{isEditingClient ? "Update Client" : "Create Client"}</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -4935,6 +6590,7 @@ const renderClientsContent = () => {
   );
 };
 
+// ==================== RENDER BOOKS CONTENT ====================
 const renderBooksContent = () => {
   
   // Get ONLY business books (category === "book" or no category)
@@ -4946,52 +6602,6 @@ const renderBooksContent = () => {
     if (accountCategories.includes(b.category)) return false;
     return true;
   });
-  
-  // Function to create a book
-  const handleCreateBookOnly = async () => {
-    if (!localNewBookName.trim()) {
-      Alert.alert("Error", "Please enter a book name");
-      return;
-    }
-    
-    if (!user) {
-      Alert.alert("Error", "You must be logged in");
-      return;
-    }
-    
-    try {
-      const newBookData = {
-        name: localNewBookName,
-        description: localNewBookDescription || "",
-        type: "business",
-        category: "book",
-        isCloud: true,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        userId: user.id,
-        role: "owner",
-        icon: "📚",
-        color: "#" + Math.floor(Math.random()*16777215).toString(16),
-      };
-      
-      console.log("🔵 Creating BOOK from Books page:", newBookData);
-      
-      const booksRef = collection(db, 'books');
-      await addDoc(booksRef, newBookData);
-      
-      await refreshBooks();
-      setRefreshTrigger(prev => prev + 1);
-      
-      Alert.alert("Success", "Book created successfully!");
-      setLocalShowBookModal(false);
-      setLocalNewBookName("");
-      setLocalNewBookDescription("");
-      
-    } catch (error) {
-      console.error("Error creating book:", error);
-      Alert.alert("Error", "Failed to create book");
-    }
-  };
   
   // Toggle book expansion
   const toggleBookExpansion = (bookId: string) => {
@@ -5032,74 +6642,141 @@ const renderBooksContent = () => {
               const isLinked = book.userId !== user?.id;
               const bookTransactions = getBookTransactions(book.id);
               const isExpanded = expandedBookId === book.id;
+              const isEditing = editingBookId === book.id;
               
               return (
                 <View key={book.id} style={styles.bookContainer}>
-                  <Pressable 
-                    onPress={() => toggleBookExpansion(book.id)} 
-                    style={styles.accountCard}
-                  >
+                  {/* Book Card */}
+                  <View style={styles.accountCard}>
                     <View style={[styles.accountCardIcon, { backgroundColor: '#8B5CF615' }]}>
                       <Feather name="book-open" size={22} color="#8B5CF6" />
                     </View>
+                    
                     <View style={styles.accountCardInfo}>
-                      <Text style={styles.accountCardName}>{book.name}</Text>
-                      <View style={styles.accountCardChips}>
-                        {isLinked && (
-                          <View style={[styles.chip, styles.linkedChip]}>
-                            <Feather name="link" size={10} color="#10B981" />
-                            <Text style={styles.chipTextLinked}>Linked</Text>
+                      {isEditing ? (
+                        <View style={styles.editNameContainer}>
+                          <TextInput
+                            style={styles.editNameInput}
+                            value={editingBookName}
+                            onChangeText={setEditingBookName}
+                            autoFocus
+                            placeholder="Enter book name"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                          <View style={styles.editNameActions}>
+                            <Pressable 
+                              onPress={() => {
+                                setEditingBookId(null);
+                                setEditingBookName("");
+                              }} 
+                              style={[styles.editNameBtn, styles.editNameCancel]}
+                            >
+                              <Feather name="x" size={14} color="#6B7280" />
+                            </Pressable>
+                            <Pressable 
+                              onPress={() => {
+                                if (!editingBookName.trim()) {
+                                  Alert.alert("Error", "Book name cannot be empty");
+                                  return;
+                                }
+                                saveBookName(book.id);
+                              }} 
+                              style={[styles.editNameBtn, styles.editNameSave]}
+                            >
+                              <Feather name="check" size={14} color="#FFFFFF" />
+                            </Pressable>
                           </View>
+                        </View>
+                      ) : (
+                        <>
+                          <Text style={styles.accountCardName}>{book.name}</Text>
+                          <View style={styles.accountCardChips}>
+                            {isLinked && (
+                              <View style={[styles.chip, styles.linkedChip]}>
+                                <Feather name="link" size={10} color="#10B981" />
+                                <Text style={styles.chipTextLinked}>Linked</Text>
+                              </View>
+                            )}
+                            <View style={[styles.chip, styles.businessChip]}>
+                              <Feather name="book-open" size={10} color="#8B5CF6" />
+                              <Text style={styles.chipTextBusiness}>Book</Text>
+                            </View>
+                            <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
+                              <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
+                                {bookTransactions.length} txns
+                              </Text>
+                            </View>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                    
+                    <View style={styles.accountCardRight}>
+                      
+<Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
+  {formatCurrencyLarge(balance)}
+</Text>
+                      
+                      {/* Action Buttons */}
+                      <View style={styles.accountActionButtons}>
+                        {!isEditing && (
+                          <>
+                            <Pressable 
+  onPress={() => {
+    setEditBookId(book.id);
+    setEditBookName(book.name);
+    setEditBookDescription(book.description || "");
+    setShowEditBookModal(true);
+  }} 
+  style={styles.accountActionBtn}
+>
+  <Feather name="edit-2" size={14} color="#3B82F6" />
+</Pressable>
+                            <Pressable 
+                              onPress={() => deleteBusinessBook(book.id, book.name)} 
+                              style={styles.accountActionBtn}
+                            >
+                              <Feather name="trash-2" size={14} color="#EF4444" />
+                            </Pressable>
+                          </>
                         )}
-                        <View style={[styles.chip, styles.businessChip]}>
-                          <Feather name="book-open" size={10} color="#8B5CF6" />
-                          <Text style={styles.chipTextBusiness}>Book</Text>
-                        </View>
-                        <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
-                          <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
-                            {bookTransactions.length} txns
-                          </Text>
-                        </View>
+                        <Pressable 
+                          onPress={() => toggleBookExpansion(book.id)} 
+                          style={styles.accountExpandBtn}
+                        >
+                          <Feather 
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                            size={18} 
+                            color="#9CA3AF" 
+                          />
+                        </Pressable>
                       </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
-                        {getCurrencyCode()} {Math.abs(balance).toLocaleString('en-EG')}
-                      </Text>
-                      <Feather 
-                        name={isExpanded ? 'chevron-up' : 'chevron-down'} 
-                        size={20} 
-                        color="#9CA3AF" 
-                      />
-                    </View>
-                  </Pressable>
+                  </View>
                   
+                  {/* Expanded Transactions List */}
                   {isExpanded && (
                     <View style={styles.expandedTransactionsContainer}>
                       <View style={styles.expandedHeader}>
                         <Text style={styles.expandedTitle}>Transactions</Text>
-                        
-                        
-<Pressable 
-  onPress={() => {
-    console.log("🔵 BUSINESS BOOKS - Add button pressed");
-    console.log("🔵 book.id:", book.id);
-    console.log("🔵 book.name:", book.name);
-    openAddModal("business", book.id, book.name);
-  }} 
-  style={styles.expandedAddBtn}
->
-  <Feather name="plus-circle" size={16} color="#FFFFFF" />
-  <Text style={styles.expandedAddBtnText}>Add</Text>
-</Pressable>
+                        <Pressable 
+                          onPress={() => {
+                            console.log("🔵 BUSINESS BOOKS - Add button pressed");
+                            console.log("🔵 book.id:", book.id);
+                            console.log("🔵 book.name:", book.name);
+                            openAddModal("business", book.id, book.name);
+                          }} 
+                          style={styles.expandedAddBtn}
+                        >
+                          <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                          <Text style={styles.expandedAddBtnText}>Add</Text>
+                        </Pressable>
                       </View>
                       
                       {bookTransactions.length === 0 ? (
                         <View style={styles.emptyTransactionsState}>
                           <Feather name="inbox" size={32} color="#D1D5DB" />
                           <Text style={styles.emptyTransactionsText}>No transactions yet</Text>
-                          
-                          {/* ✅ FIXED - Empty State Add Button */}
                           <Pressable 
                             onPress={() => openAddModal("business", book.id, book.name)} 
                             style={styles.emptyAddBtn}
@@ -5203,7 +6880,7 @@ const renderBooksContent = () => {
                 onPress={handleCreateBookOnly} 
                 style={[styles.createBookConfirm, { backgroundColor: '#3B82F6' }]}
               >
-                <Text style={styles.createBookConfirmText}>Create Book</Text>
+                <Text style={styles.createBookConfirmText}>Create</Text>
               </Pressable>
             </View>
           </View>
@@ -5554,287 +7231,341 @@ const renderReportsContent = () => {
 
   // Render Home Page Content
   // Render Home Page Content - MODIFIED TO SHOW ONLY ACCOUNTS WITH TRANSACTION OPTIONS
-const renderHomeContent = () => (
-  <>
-    <View style={styles.greetingSectionNew}>
-      <Text style={styles.greetingTextNew}>{getGreeting()},</Text>
-      <Text style={styles.userNameTextNew}>{getGreetingName()}!</Text>
-      <Text style={styles.snapshotText}>Your {selectedView === "personal" ? "personal" : "business"} financial snapshot</Text>
-    </View>
+// ==================== RENDER HOME CONTENT ====================
+const renderHomeContent = () => {
+  return (
+    <>
+      <View style={styles.greetingSectionNew}>
+        <Text style={styles.greetingTextNew}>{getGreeting()},</Text>
+        <Text style={styles.userNameTextNew}>{getGreetingName()}!</Text>
+        <Text style={styles.snapshotText}>Your {selectedView === "personal" ? "personal" : "business"} financial snapshot</Text>
+      </View>
 
-    {selectedView === "personal" ? (
-      // ========== PERSONAL VIEW ==========
-      <>
-        <View style={styles.liquidCashCard}>
-          <LinearGradient colors={['#3B82F6', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.liquidCardGradient} />
-          <View style={styles.liquidCardHeader}>
-            <View>
-              <Text style={styles.liquidCashLabel}>LIQUID CASH</Text>
-              <Text style={styles.liquidCashAmount}>{getCurrencyCode()} {personalStats.totalBalance.toLocaleString('en-EG')}</Text>
-            </View>
-            <View style={styles.liveChip}><View style={styles.liveDot} /><Text style={styles.liveText}>LIVE</Text></View>
-          </View>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={[styles.statLabel, { textAlign: 'left', color: '#10B981' }]}>Investment</Text>
-              <Text style={[styles.statAmount, { textAlign: 'left' }]}>{getCurrencyCode()} {personalStats.investmentTotal.toLocaleString('en-EG')}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={[styles.statLabel, { textAlign: 'left', color: '#EF4444' }]}>Debt</Text>
-              <Text style={[styles.statAmount, { textAlign: 'left' }]}>{getCurrencyCode()} {personalStats.debtTotal.toLocaleString('en-EG')}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.safeSpendCard}>
-          <View style={styles.safeSpendHeader}>
-            <Text style={styles.safeSpendLabel}>Safe to spend</Text>
-            <View style={[styles.healthyChip, { backgroundColor: personalStats.isHealthy ? '#10B98120' : '#EF444420' }]}>
-              <Text style={[styles.healthyText, { color: personalStats.isHealthy ? '#10B981' : '#EF4444' }]}>{personalStats.isHealthy ? "Healthy" : "Warning"}</Text>
-            </View>
-          </View>
-          <Text style={styles.safeSpendAmount}>{getCurrencyCode()} {personalStats.safeToSpend.toLocaleString('en-EG')}</Text>
-          <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { width: `${personalStats.spentPercentage}%`, backgroundColor: '#3B82F6' }]} />
-          </View>
-          <Text style={styles.progressText}>{personalStats.spentPercentage.toFixed(0)}% spent of safe amount</Text>
-        </View>
-
-        <View style={styles.recentTransactionsSection}>
-          <Text style={styles.recentTransactionsTitle}>Recent Transactions</Text>
-          {personalTransactions.length === 0 ? (
-            <View style={styles.noTransactionsCard}>
-              <Feather name="credit-card" size={32} color="#9CA3AF" />
-              <Text style={styles.noTransactionsText}>No transactions yet</Text>
-              <Text style={styles.noTransactionsSubtext}>Tap the + button to add your first transaction</Text>
-            </View>
-          ) : (
-            personalTransactions.slice(0, 5).map((tx) => (
-              <View key={tx.id} style={styles.recentTxItem}>
-                <View style={[styles.recentTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
-                  <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={18} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
-                </View>
-                <View style={styles.recentTxInfo}>
-                  <Text style={styles.recentTxCategory}>{tx.category}</Text>
-                  <Text style={styles.recentTxDate}>{formatDate(tx.createdAt)}</Text>
-                </View>
-                <Text style={[styles.recentTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
-                  {tx.type === 'income' ? '+' : '-'} {getCurrencyCode()} {tx.amount.toLocaleString('en-EG')}
-                </Text>
+      {selectedView === "personal" ? (
+        // ========== PERSONAL VIEW ==========
+        <>
+          <View style={styles.liquidCashCard}>
+            <LinearGradient colors={['#3B82F6', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.liquidCardGradient} />
+            <View style={styles.liquidCardHeader}>
+              <View>
+                <Text style={styles.liquidCashLabel}>LIQUID CASH</Text>
+                <Text style={styles.liquidCashAmount}>{getCurrencyCode()} {personalStats.totalBalance.toLocaleString('en-EG')}</Text>
               </View>
-            ))
-          )}
-        </View>
-      </>
-    ) : (
-      // ========== BUSINESS VIEW HOME - ONLY ACCOUNTS ==========
-      <>
-        <View style={styles.businessHeader}>
-          <Text style={styles.businessTitle}>Accounts</Text>
-          <View style={styles.businessHeaderButtons}>
-            <Pressable onPress={() => { 
-              setNewBookType("business"); 
-              setNewBookCategory("assets");
-              setShowCreateBookModal(true); 
-            }} style={styles.businessAddAccountBtn}>
-              <Feather name="plus" size={16} color="#3B82F6" />
-              <Text style={styles.businessAddAccountText}>Add Account</Text>
-            </Pressable>
-          </View>
-        </View>
-<View style={styles.businessStatsRow}>
-  <View style={[styles.businessStatCardSmall, { backgroundColor: '#F0FDF4' }]}>
-    <Text style={styles.businessStatEmoji}>📈</Text>
-    <Text style={styles.businessStatLabelSmall}>Total Assets</Text>
-    <Text style={[styles.businessStatAmountSmall, { color: '#10B981' }]}>
-      {formatCurrencyLarge(businessStats.totalAssets)}
-    </Text>
-  </View>
-  <View style={[styles.businessStatCardSmall, { backgroundColor: '#FEF2F2' }]}>
-    <Text style={styles.businessStatEmoji}>📉</Text>
-    <Text style={styles.businessStatLabelSmall}>Total Liabilities</Text>
-    <Text style={[styles.businessStatAmountSmall, { color: '#EF4444' }]}>
-      {formatCurrencyLarge(businessStats.totalLiabilities)}
-    </Text>
-  </View>
-  <View style={[styles.businessStatCardSmall, { backgroundColor: '#EFF6FF' }]}>
-    <Text style={styles.businessStatEmoji}>💎</Text>
-    <Text style={styles.businessStatLabelSmall}>Net Worth</Text>
-    <Text style={[styles.businessStatAmountSmall, { color: businessStats.netWorth >= 0 ? '#1F2937' : '#EF4444' }]}>
-      {formatCurrencyLarge(businessStats.netWorth)}
-    </Text>
-  </View>
-</View>
-
-        {/* Get ONLY business accounts (NOT books) */}
-        {(() => {
-          const businessAccounts = books.filter(b => {
-            if (b.type !== "business") return false;
-            if (!b.category) return false;
-            if (b.category === "book") return false;
-            const accountCategories = ['bank', 'credit-card', 'investment', 'assets'];
-            return accountCategories.includes(b.category);
-          });
-
-          const categorizedHomeAccounts = {
-            banks: businessAccounts.filter(b => b.category === "bank"),
-            creditCards: businessAccounts.filter(b => b.category === "credit-card"),
-            investments: businessAccounts.filter(b => b.category === "investment"),
-            assets: businessAccounts.filter(b => b.category === "assets"),
-          };
-
-          const homeAccountCategories = [
-            { id: 'banks', name: 'BANK ACCOUNTS', icon: 'briefcase', color: '#3B82F6', books: categorizedHomeAccounts.banks },
-            { id: 'creditCards', name: 'CREDIT CARDS', icon: 'credit-card', color: '#EF4444', books: categorizedHomeAccounts.creditCards },
-            { id: 'investments', name: 'INVESTMENTS', icon: 'trending-up', color: '#10B981', books: categorizedHomeAccounts.investments },
-            { id: 'assets', name: 'ASSETS', icon: 'package', color: '#F59E0B', books: categorizedHomeAccounts.assets },
-          ].filter(cat => cat.books.length > 0);
-
-          if (homeAccountCategories.length === 0) {
-            return (
-              <View style={styles.emptyBusinessState}>
-                <Feather name="briefcase" size={48} color="#D1D5DB" />
-                <Text style={styles.emptyBusinessTitle}>No Business Accounts Yet</Text>
-                <Text style={styles.emptyBusinessText}>Create your first business account to get started</Text>
-                <Pressable onPress={() => { 
-                  setNewBookType("business"); 
-                  setNewBookCategory("assets");
-                  setShowCreateBookModal(true); 
-                }} style={styles.emptyBusinessBtn}>
-                  <Text style={styles.emptyBusinessBtnText}>Create Account</Text>
-                </Pressable>
+              <View style={styles.liveChip}><View style={styles.liveDot} /><Text style={styles.liveText}>LIVE</Text></View>
+            </View>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={[styles.statLabel, { textAlign: 'left', color: '#10B981' }]}>Investment</Text>
+                <Text style={[styles.statAmount, { textAlign: 'left' }]}>{getCurrencyCode()} {personalStats.investmentTotal.toLocaleString('en-EG')}</Text>
               </View>
-            );
-          }
+              <View style={styles.statCard}>
+                <Text style={[styles.statLabel, { textAlign: 'left', color: '#EF4444' }]}>Debt</Text>
+                <Text style={[styles.statAmount, { textAlign: 'left' }]}>{getCurrencyCode()} {personalStats.debtTotal.toLocaleString('en-EG')}</Text>
+              </View>
+            </View>
+          </View>
 
-          return homeAccountCategories.map((category) => (
-            <View key={category.id} style={styles.accountCategorySection}>
-              <Text style={styles.accountCategoryTitle}>{category.name}</Text>
-              <View style={styles.accountCardsContainer}>
-                {category.books.map((book) => {
-                  const balance = getBookBalance(book.id);
-                  const isLinked = book.userId !== user?.id;
-                  const bookTransactions = allTransactionsForBusiness?.filter(t => t.bookId === book.id) || [];
-                  const isExpanded = expandedAccountId === book.id;
+          <View style={styles.safeSpendCard}>
+            <View style={styles.safeSpendHeader}>
+              <Text style={styles.safeSpendLabel}>Safe to spend</Text>
+              <View style={[styles.healthyChip, { backgroundColor: personalStats.isHealthy ? '#10B98120' : '#EF444420' }]}>
+                <Text style={[styles.healthyText, { color: personalStats.isHealthy ? '#10B981' : '#EF4444' }]}>{personalStats.isHealthy ? "Healthy" : "Warning"}</Text>
+              </View>
+            </View>
+            <Text style={styles.safeSpendAmount}>{getCurrencyCode()} {personalStats.safeToSpend.toLocaleString('en-EG')}</Text>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBar, { width: `${personalStats.spentPercentage}%`, backgroundColor: '#3B82F6' }]} />
+            </View>
+            <Text style={styles.progressText}>{personalStats.spentPercentage.toFixed(0)}% spent of safe amount</Text>
+          </View>
+
+          <View style={styles.recentTransactionsSection}>
+            <Text style={styles.recentTransactionsTitle}>Recent Transactions</Text>
+            {personalTransactions.length === 0 ? (
+              <View style={styles.noTransactionsCard}>
+                <Feather name="credit-card" size={32} color="#9CA3AF" />
+                <Text style={styles.noTransactionsText}>No transactions yet</Text>
+                <Text style={styles.noTransactionsSubtext}>Tap the + button to add your first transaction</Text>
+              </View>
+            ) : (
+              personalTransactions.slice(0, 5).map((tx) => (
+                <View key={tx.id} style={styles.recentTxItem}>
+                  <View style={[styles.recentTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
+                    <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={18} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
+                  </View>
+                  <View style={styles.recentTxInfo}>
+                    <Text style={styles.recentTxCategory}>{tx.category}</Text>
+                    <Text style={styles.recentTxDate}>{formatDate(tx.createdAt)}</Text>
+                  </View>
+                  <Text style={[styles.recentTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
+                    {tx.type === 'income' ? '+' : '-'} {getCurrencyCode()} {tx.amount.toLocaleString('en-EG')}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        </>
+      ) : (
+        // ========== BUSINESS VIEW HOME ==========
+        <>
+          <View style={styles.businessHeader}>
+            <Text style={styles.businessTitle}>Accounts</Text>
+            <View style={styles.businessHeaderButtons}>
+              <Pressable 
+                onPress={() => {
+                  console.log("🔵 Adding transaction from business home");
+                  const businessAccounts = books.filter(b => 
+                    b.type === "business" && 
+                    b.category && 
+                    ['bank', 'credit-card', 'investment', 'assets'].includes(b.category)
+                  );
                   
-                  return (
-                    <View key={book.id} style={styles.bookContainer}>
-                      {/* Account Card - Click to expand */}
-                      <Pressable 
-                        onPress={() => {
-                          setExpandedAccountId(expandedAccountId === book.id ? null : book.id);
-                        }} 
-                        style={styles.accountCard}
-                      >
-                        <View style={[styles.accountCardIcon, { backgroundColor: `${category.color}15` }]}>
-                          <Feather name={category.icon as any} size={22} color={category.color} />
-                        </View>
-                        <View style={styles.accountCardInfo}>
-                          <Text style={styles.accountCardName}>{book.name}</Text>
-                          <View style={styles.accountCardChips}>
-                            {isLinked && (
-                              <View style={[styles.chip, styles.linkedChip]}>
-                                <Feather name="link" size={10} color="#10B981" />
-                                <Text style={styles.chipTextLinked}>Linked</Text>
-                              </View>
-                            )}
-                            <View style={[styles.chip, styles.businessChip]}>
-                              <Feather name="briefcase" size={10} color="#F59E0B" />
-                              <Text style={styles.chipTextBusiness}>Business</Text>
-                            </View>
-                            <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
-                              <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
-                                {bookTransactions.length} txns
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-<Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
-  {formatCurrencyLarge(balance)}
-</Text>
-                          <Feather 
-                            name={isExpanded ? 'chevron-up' : 'chevron-down'} 
-                            size={20} 
-                            color="#9CA3AF" 
-                          />
-                        </View>
-                      </Pressable>
-                      
-                      {/* Expanded Transactions List */}
-                      {isExpanded && (
-                        <View style={styles.expandedTransactionsContainer}>
-                          <View style={styles.expandedHeader}>
-                            <Text style={styles.expandedTitle}>Transactions</Text>
-                            <Pressable 
-                              onPress={() => {
-                                setActiveBook(book);
-                                router.push("/add-transaction");
-                              }} 
-                              style={styles.expandedAddBtn}
-                            >
-                              <Feather name="plus-circle" size={16} color="#FFFFFF" />
-                              <Text style={styles.expandedAddBtnText}>Add</Text>
-                            </Pressable>
+                  if (businessAccounts.length > 0) {
+                    openAddModal("business", businessAccounts[0].id, businessAccounts[0].name);
+                  } else {
+                    Alert.alert(
+                      "No Accounts",
+                      "Please create an account first before adding transactions",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { 
+                          text: "Create Account", 
+                          onPress: () => {
+                            setNewBookType("business");
+                            setNewBookCategory("assets");
+                            setShowCreateBookModal(true);
+                          }
+                        }
+                      ]
+                    );
+                  }
+                }} 
+                style={styles.businessAddAccountBtn}
+              >
+                <Feather name="plus" size={16} color="#3B82F6" />
+                <Text style={styles.businessAddAccountText}>Add Transaction</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.businessStatsRow}>
+            <View style={[styles.businessStatCardSmall, { backgroundColor: '#F0FDF4' }]}>
+              <Text style={styles.businessStatEmoji}>📈</Text>
+              <Text style={styles.businessStatLabelSmall}>Total Assets</Text>
+              <Text style={[styles.businessStatAmountSmall, { color: '#10B981' }]}>
+                {formatCurrencyLarge(businessStats.totalAssets)}
+              </Text>
+            </View>
+            <View style={[styles.businessStatCardSmall, { backgroundColor: '#FEF2F2' }]}>
+              <Text style={styles.businessStatEmoji}>📉</Text>
+              <Text style={styles.businessStatLabelSmall}>Total Liabilities</Text>
+              <Text style={[styles.businessStatAmountSmall, { color: '#EF4444' }]}>
+                {formatCurrencyLarge(businessStats.totalLiabilities)}
+              </Text>
+            </View>
+            <View style={[styles.businessStatCardSmall, { backgroundColor: '#EFF6FF' }]}>
+              <Text style={styles.businessStatEmoji}>💎</Text>
+              <Text style={styles.businessStatLabelSmall}>Net Worth</Text>
+              <Text style={[styles.businessStatAmountSmall, { color: businessStats.netWorth >= 0 ? '#1F2937' : '#EF4444' }]}>
+                {formatCurrencyLarge(businessStats.netWorth)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Get ONLY business accounts (NOT books) */}
+          {(() => {
+            const businessAccounts = books.filter(b => {
+              if (b.type !== "business") return false;
+              if (!b.category) return false;
+              if (b.category === "book") return false;
+              const accountCategories = ['bank', 'credit-card', 'investment', 'assets'];
+              return accountCategories.includes(b.category);
+            });
+
+            const categorizedHomeAccounts = {
+              banks: businessAccounts.filter(b => b.category === "bank"),
+              creditCards: businessAccounts.filter(b => b.category === "credit-card"),
+              investments: businessAccounts.filter(b => b.category === "investment"),
+              assets: businessAccounts.filter(b => b.category === "assets"),
+            };
+
+            const homeAccountCategories = [
+              { id: 'banks', name: 'BANK ACCOUNTS', icon: 'briefcase', color: '#3B82F6', books: categorizedHomeAccounts.banks },
+              { id: 'creditCards', name: 'CREDIT CARDS', icon: 'credit-card', color: '#EF4444', books: categorizedHomeAccounts.creditCards },
+              { id: 'investments', name: 'INVESTMENTS', icon: 'trending-up', color: '#10B981', books: categorizedHomeAccounts.investments },
+              { id: 'assets', name: 'ASSETS', icon: 'package', color: '#F59E0B', books: categorizedHomeAccounts.assets },
+            ].filter(cat => cat.books.length > 0);
+
+            if (homeAccountCategories.length === 0) {
+              return (
+                <View style={styles.emptyBusinessState}>
+                  <Feather name="briefcase" size={48} color="#D1D5DB" />
+                  <Text style={styles.emptyBusinessTitle}>No Business Accounts Yet</Text>
+                  <Text style={styles.emptyBusinessText}>Create your first business account to get started</Text>
+                  <Pressable onPress={() => { 
+                    setNewBookType("business"); 
+                    setNewBookCategory("assets");
+                    setShowCreateBookModal(true); 
+                  }} style={styles.emptyBusinessBtn}>
+                    <Text style={styles.emptyBusinessBtnText}>Create Account</Text>
+                  </Pressable>
+                </View>
+              );
+            }
+
+            return homeAccountCategories.map((category) => (
+              <View key={category.id} style={styles.accountCategorySection}>
+                <Text style={styles.accountCategoryTitle}>{category.name}</Text>
+                <View style={styles.accountCardsContainer}>
+                  {category.books.map((book) => {
+                    const balance = getBookBalance(book.id);
+                    const isLinked = book.userId !== user?.id;
+                    const bookTransactions = allTransactionsForBusiness?.filter(t => t.bookId === book.id) || [];
+                    const isExpanded = expandedAccountId === book.id;
+                    
+                    return (
+                      <View key={book.id} style={styles.bookContainer}>
+                        {/* Account Card */}
+                        <View style={styles.accountCard}>
+                          <View style={[styles.accountCardIcon, { backgroundColor: `${category.color}15` }]}>
+                            <Feather name={category.icon as any} size={22} color={category.color} />
                           </View>
                           
-                          {bookTransactions.length === 0 ? (
-                            <View style={styles.emptyTransactionsState}>
-                              <Feather name="inbox" size={32} color="#D1D5DB" />
-                              <Text style={styles.emptyTransactionsText}>No transactions yet</Text>
+                          <View style={styles.accountCardInfo}>
+                            <Text style={styles.accountCardName}>{book.name}</Text>
+                            <View style={styles.accountCardChips}>
+                              {isLinked && (
+                                <View style={[styles.chip, styles.linkedChip]}>
+                                  <Feather name="link" size={10} color="#10B981" />
+                                  <Text style={styles.chipTextLinked}>Linked</Text>
+                                </View>
+                              )}
+                              <View style={[styles.chip, styles.businessChip]}>
+                                <Feather name="briefcase" size={10} color="#F59E0B" />
+                                <Text style={styles.chipTextBusiness}>Business</Text>
+                              </View>
+                              <View style={[styles.chip, { backgroundColor: '#E5E7EB' }]}>
+                                <Text style={[styles.chipTextBusiness, { color: '#6B7280' }]}>
+                                  {bookTransactions.length} txns
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                          
+                          <View style={styles.accountCardRight}>
+                            <Text style={[styles.accountCardBalance, { color: balance >= 0 ? '#10B981' : '#EF4444' }]}>
+                              {formatCurrencyLarge(balance)}
+                            </Text>
+                            
+                            {/* Action Buttons */}
+                            <View style={styles.accountActionButtons}>
+                              <Pressable 
+                                onPress={() => {
+                                  setEditAccountId(book.id);
+                                  setEditAccountName(book.name);
+                                  setEditAccountType(book.category || "Account");
+                                  setShowEditAccountModal(true);
+                                }} 
+                                style={styles.accountActionBtn}
+                              >
+                                <Feather name="edit-2" size={14} color="#3B82F6" />
+                              </Pressable>
+                              <Pressable 
+                                onPress={() => deleteBusinessAccount(book.id, book.name)} 
+                                style={styles.accountActionBtn}
+                              >
+                                <Feather name="trash-2" size={14} color="#EF4444" />
+                              </Pressable>
+                              <Pressable 
+                                onPress={() => {
+                                  setExpandedAccountId(expandedAccountId === book.id ? null : book.id);
+                                }} 
+                                style={styles.accountExpandBtn}
+                              >
+                                <Feather 
+                                  name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                                  size={18} 
+                                  color="#9CA3AF" 
+                                />
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                        
+                        {/* Expanded Transactions List */}
+                        {isExpanded && (
+                          <View style={styles.expandedTransactionsContainer}>
+                            <View style={styles.expandedHeader}>
+                              <Text style={styles.expandedTitle}>Transactions</Text>
                               <Pressable 
                                 onPress={() => {
                                   setActiveBook(book);
                                   router.push("/add-transaction");
                                 }} 
-                                style={styles.emptyAddBtn}
+                                style={styles.expandedAddBtn}
                               >
-                                <Text style={styles.emptyAddBtnText}>Add your first transaction</Text>
+                                <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                                <Text style={styles.expandedAddBtnText}>Add</Text>
                               </Pressable>
                             </View>
-                          ) : (
-                            bookTransactions.slice(0, 5).map((tx) => (
-                              <View key={tx.id} style={styles.expandedTxItem}>
-                                <View style={[styles.expandedTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
-                                  <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={16} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
-                                </View>
-                                <View style={styles.expandedTxInfo}>
-                                  <Text style={styles.expandedTxCategory}>{tx.category}</Text>
-                                  <Text style={styles.expandedTxDate}>{formatDate(tx.createdAt)}</Text>
-                                </View>
-                                // In the expanded transaction items, replace:
-<Text style={[styles.expandedTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
-  {tx.type === 'income' ? '+' : '-'} {formatCurrencyLarge(tx.amount)}
-</Text>
+                            
+                            {bookTransactions.length === 0 ? (
+                              <View style={styles.emptyTransactionsState}>
+                                <Feather name="inbox" size={32} color="#D1D5DB" />
+                                <Text style={styles.emptyTransactionsText}>No transactions yet</Text>
+                                <Pressable 
+                                  onPress={() => {
+                                    setActiveBook(book);
+                                    router.push("/add-transaction");
+                                  }} 
+                                  style={styles.emptyAddBtn}
+                                >
+                                  <Text style={styles.emptyAddBtnText}>Add your first transaction</Text>
+                                </Pressable>
                               </View>
-                            ))
-                          )}
-                          
-                          {bookTransactions.length > 5 && (
-                            <Pressable 
-                              onPress={() => {
-                                setActiveBook(book);
-                                handleOpenBook(book);
-                              }} 
-                              style={styles.viewAllBtn}
-                            >
-                              <Text style={styles.viewAllBtnText}>View all {bookTransactions.length} transactions</Text>
-                              <Feather name="arrow-right" size={14} color="#3B82F6" />
-                            </Pressable>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
+                            ) : (
+                              bookTransactions.slice(0, 5).map((tx) => (
+                                <View key={tx.id} style={styles.expandedTxItem}>
+                                  <View style={[styles.expandedTxIcon, { backgroundColor: tx.type === 'income' ? '#10B98120' : '#EF444420' }]}>
+                                    <Feather name={tx.type === 'income' ? 'trending-up' : 'trending-down'} size={16} color={tx.type === 'income' ? '#10B981' : '#EF4444'} />
+                                  </View>
+                                  <View style={styles.expandedTxInfo}>
+                                    <Text style={styles.expandedTxCategory}>{tx.category}</Text>
+                                    <Text style={styles.expandedTxDate}>{formatDate(tx.createdAt)}</Text>
+                                  </View>
+                                  <Text style={[styles.expandedTxAmount, { color: tx.type === 'income' ? '#10B981' : '#EF4444' }]}>
+                                    {tx.type === 'income' ? '+' : '-'} {formatCurrencyLarge(tx.amount)}
+                                  </Text>
+                                </View>
+                              ))
+                            )}
+                            
+                            {bookTransactions.length > 5 && (
+                              <Pressable 
+                                onPress={() => {
+                                  setActiveBook(book);
+                                  handleOpenBook(book);
+                                }} 
+                                style={styles.viewAllBtn}
+                              >
+                                <Text style={styles.viewAllBtnText}>View all {bookTransactions.length} transactions</Text>
+                                <Feather name="arrow-right" size={14} color="#3B82F6" />
+                              </Pressable>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
-          ));
-        })()}
-      </>
-    )}
-  </>
-);
+            ));
+          })()}
+        </>
+      )}
+    </>
+  );
+};
 
   return (
     <View style={[styles.container, { backgroundColor: '#FFFFFF', flex: 1 }]}>
@@ -5864,6 +7595,40 @@ const renderHomeContent = () => (
           />
         </View>
       </Modal>
+<EditAccountNameModal
+      visible={showEditAccountModal}
+      onClose={() => {
+        setShowEditAccountModal(false);
+        setEditAccountId(null);
+        setEditAccountName("");
+        setEditAccountType("");
+      }}
+      onSave={(newName) => {
+        if (editAccountId) {
+          saveAccountName(editAccountId, newName);
+        }
+      }}
+      accountName={editAccountName}
+      accountType={editAccountType}
+      loading={isSavingAccountName}
+    />
+<EditBookModal
+      visible={showEditBookModal}
+      onClose={() => {
+        setShowEditBookModal(false);
+        setEditBookId(null);
+        setEditBookName("");
+        setEditBookDescription("");
+      }}
+      onSave={(newName, newDescription) => {
+        if (editBookId) {
+          saveBookDetails(editBookId, newName, newDescription);
+        }
+      }}
+      bookName={editBookName}
+      bookDescription={editBookDescription}
+      loading={isSavingBook}
+    />
       <ScrollView 
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad + 80 }]} 
         showsVerticalScrollIndicator={false}
@@ -5966,7 +7731,7 @@ const renderHomeContent = () => (
   style={[styles.createBookConfirm, { backgroundColor: '#3B82F6' }]}
 >
   <Text style={styles.createBookConfirmText}>
-    {newBookType === "business" && newBookCategory && newBookCategory !== "book" ? "Create Account" : "Create"}
+Create
   </Text>
 </Pressable>
             </View>
@@ -6651,6 +8416,23 @@ modalContentFull: {
   borderRadius: 24,
   padding: 20,
 },
+// Add to your styles object
+editBookBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  gap: 8,
+  marginBottom: 16,
+  backgroundColor: '#8B5CF615',
+},
+editBookBadgeText: {
+  fontSize: 13,
+  color: '#8B5CF6',
+  fontFamily: 'Inter_500Medium',
+},
 modalHeader: {
   flexDirection: "row",
   justifyContent: "space-between",
@@ -6959,6 +8741,61 @@ modalHeader: {
   alignItems: "center",
   marginBottom: 20,
 },
+// Add to your styles object
+transactionItemContainer: {
+  marginBottom: 8,
+},
+transactionActions: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+transactionActionButtons: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+transactionActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
+},
+editTxContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  flex: 1,
+},
+editTxInput: {
+  flex: 1,
+  fontSize: 14,
+  color: '#111827',
+  fontFamily: 'Inter_500Medium',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+},
+editTxActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editTxBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editTxCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editTxSave: {
+  backgroundColor: '#3B82F6',
+},
 modalTitle: {
   fontSize: 20,
   fontWeight: "bold",
@@ -7010,6 +8847,28 @@ reportActionText: {
   fontSize: 14,
   color: "#3B82F6",
   fontWeight: "500",
+},
+// Add to your styles object
+transactionItemContainer: {
+  marginBottom: 8,
+},
+transactionActions: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+transactionActionButtons: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+transactionActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
 },
 reportExportCounter: {
   flexDirection: "row",
@@ -7849,6 +9708,117 @@ filterTypeRow: {
   gap: 10,
   flexWrap: 'wrap',
 },
+// Add to your styles object
+editTypeToggle: {
+  flexDirection: 'row',
+  backgroundColor: '#F3F4F6',
+  borderRadius: 12,
+  padding: 4,
+  marginBottom: 16,
+},
+editTypeBtn: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  paddingVertical: 10,
+  borderRadius: 10,
+},
+editTypeBtnIncome: {
+  backgroundColor: '#10B98120',
+},
+editTypeBtnExpense: {
+  backgroundColor: '#EF444420',
+},
+editTypeText: {
+  fontSize: 14,
+  fontFamily: 'Inter_500Medium',
+  color: '#6B7280',
+},
+editTypeTextIncome: {
+  color: '#10B981',
+},
+editTypeTextExpense: {
+  color: '#EF4444',
+},
+editAmountRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 4,
+  marginBottom: 16,
+  backgroundColor: '#FFFFFF',
+},
+editAmountSymbol: {
+  fontSize: 20,
+  color: '#6B7280',
+  fontFamily: 'Inter_500Medium',
+  marginRight: 8,
+},
+editAmountInput: {
+  flex: 1,
+  fontSize: 28,
+  paddingVertical: 8,
+  color: '#111827',
+  fontFamily: 'Inter_400Regular',
+},
+editCategoryGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginBottom: 16,
+},
+editCategoryChip: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 10,
+  backgroundColor: '#F3F4F6',
+  borderWidth: 1,
+  borderColor: 'transparent',
+},
+editCategoryText: {
+  fontSize: 13,
+  color: '#374151',
+  fontFamily: 'Inter_500Medium',
+},
+editPaymentScroll: {
+  flexGrow: 0,
+  marginBottom: 16,
+  marginHorizontal: -24,
+  paddingHorizontal: 24,
+},
+editPaymentChip: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  backgroundColor: '#F3F4F6',
+  marginRight: 8,
+  borderWidth: 1,
+  borderColor: 'transparent',
+},
+editPaymentChipActive: {
+  backgroundColor: '#3B82F620',
+  borderColor: '#3B82F6',
+},
+editPaymentText: {
+  fontSize: 13,
+  color: '#6B7280',
+  fontFamily: 'Inter_500Medium',
+},
+editPaymentTextActive: {
+  color: '#3B82F6',
+},
+editTextArea: {
+  minHeight: 60,
+  textAlignVertical: 'top',
+},
 filterTypeChip: {
   paddingHorizontal: 20,
   paddingVertical: 10,
@@ -7936,9 +9906,186 @@ filterRowContainer: {
   flexWrap: "wrap",
   gap: 12,
 },
+// Budget edit styles
+budgetItemRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+budgetActionButtons: {
+  flexDirection: 'row',
+  gap: 4,
+},
+budgetActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
+},
+editBudgetContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+},
+editBudgetInput: {
+  width: 80,
+  fontSize: 12,
+  color: '#111827',
+  fontFamily: 'Inter_400Regular',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+},
+editBudgetActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editBudgetBtn: {
+  width: 22,
+  height: 22,
+  borderRadius: 11,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editBudgetCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editBudgetSave: {
+  backgroundColor: '#3B82F6',
+},
+
+// Goal edit styles
+goalCardRight: {
+  alignItems: 'flex-end',
+  gap: 8,
+},
+goalActionButtons: {
+  flexDirection: 'row',
+  gap: 4,
+},
+goalActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
+},
+editGoalContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+  flexWrap: 'wrap',
+},
+editGoalNameInput: {
+  fontSize: 14,
+  color: '#111827',
+  fontFamily: 'Inter_600SemiBold',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,	
+  minWidth: 100,
+},
+editGoalTargetInput: {
+  fontSize: 12,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+  width: 80,
+},
+editGoalActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editGoalBtn: {
+  width: 22,
+  height: 22,
+  borderRadius: 11,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editGoalCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editGoalSave: {
+  backgroundColor: '#3B82F6',
+},
 typeFilterGroup: {
   flexDirection: "row",
   gap: 8,
+},
+// Add to your styles object
+editDocTypeBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 6,
+  marginBottom: 16,
+},
+editDocTypeText: {
+  fontSize: 13,
+  fontFamily: 'Inter_600SemiBold',
+},
+editFieldSelector: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginBottom: 16,
+},
+editFieldChip: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  backgroundColor: '#F3F4F6',
+  borderWidth: 1,
+  borderColor: 'transparent',
+},
+editFieldChipActive: {
+  backgroundColor: '#3B82F6',
+  borderColor: '#3B82F6',
+},
+editFieldChipText: {
+  fontSize: 13,
+  color: '#6B7280',
+  fontFamily: 'Inter_500Medium',
+},
+editFieldChipTextActive: {
+  color: '#FFFFFF',
+},
+editCurrentValueContainer: {
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 16,
+},
+editCurrentLabel: {
+  fontSize: 12,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 4,
+},
+editCurrentValue: {
+  fontSize: 15,
+  color: '#111827',
+  fontFamily: 'Inter_500Medium',
+},
+docEditBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: '#EFF6FF',
+  alignItems: 'center',
+  justifyContent: 'center',
 },
 typeFilterChip: {
   paddingHorizontal: 16,
@@ -8035,6 +10182,110 @@ reportPreviewContainer: {
   elevation: 1,
   marginBottom: 20,
 },
+// Document edit styles
+docCardNumber: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+docCardNumberText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#111827',
+  fontFamily: 'Inter_600SemiBold',
+},
+docCardParty: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+// Update the editNameContainer styles
+editNameContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  flex: 1,
+  flexWrap: 'nowrap', // Prevent wrapping
+},
+editNameInput: {
+  flex: 1,
+  fontSize: 15,
+  color: '#111827',
+  fontFamily: 'Inter_600SemiBold',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 4,
+  paddingHorizontal: 4,
+  minWidth: 80, // Minimum width for the input
+},
+editNameActions: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  flexShrink: 0, // Don't shrink the action buttons
+},
+editNameBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editNameCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editNameSave: {
+  backgroundColor: '#3B82F6',
+},
+docCardPartyText: {
+  fontSize: 12,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+},
+docEditIcon: {
+  opacity: 0.5,
+},
+editDocContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  flex: 1,
+},
+editDocInput: {
+  flex: 1,
+  fontSize: 14,
+  color: '#111827',
+  fontFamily: 'Inter_500Medium',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+},
+editDocActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editDocBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editDocCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editDocSave: {
+  backgroundColor: '#3B82F6',
+},
+docDeleteBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: '#FEF2F2',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
 reportPreviewHeader: {
   flexDirection: 'row',
   justifyContent: 'space-between',
@@ -8058,6 +10309,23 @@ reportPreviewExportBtn: {
   paddingVertical: 6,
   borderRadius: 20,
   backgroundColor: '#EFF6FF',
+},
+// Add to your styles object
+editAccountTypeBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 6,
+  marginBottom: 16,
+  backgroundColor: '#3B82F615',
+},
+editAccountTypeText: {
+  fontSize: 13,
+  color: '#3B82F6',
+  fontFamily: 'Inter_500Medium',
 },
 reportPreviewExportText: {
   fontSize: 12,
@@ -8214,6 +10482,541 @@ expandedAddBtnText: {
   color: '#FFFFFF',
   fontWeight: '500',
   fontFamily: 'Inter_500Medium',
+},
+// Add these to your styles object at the bottom of the file
+
+// ==================== DOCUMENT CREATION MODAL STYLES ====================
+docTypeGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 12,
+  marginVertical: 12,
+},
+docTypeOption: {
+  flex: 1,
+  minWidth: '45%',
+  padding: 16,
+  borderRadius: 16,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#F0F0F0',
+  backgroundColor: '#FFFFFF',
+},
+// Add these to your styles object at the bottom of the file
+
+// ==================== EDIT DOCUMENT MODAL STYLES ====================
+editDocTypeBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 6,
+  marginBottom: 16,
+},
+editDocTypeText: {
+  fontSize: 13,
+  fontFamily: 'Inter_600SemiBold',
+},
+editFieldSelector: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginBottom: 16,
+},
+editFieldChip: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  backgroundColor: '#F3F4F6',
+  borderWidth: 1,
+  borderColor: 'transparent',
+},
+editFieldChipActive: {
+  backgroundColor: '#3B82F6',
+  borderColor: '#3B82F6',
+},
+editFieldChipText: {
+  fontSize: 13,
+  color: '#6B7280',
+  fontFamily: 'Inter_500Medium',
+},
+editFieldChipTextActive: {
+  color: '#FFFFFF',
+},
+editCurrentValueContainer: {
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 16,
+},
+editCurrentLabel: {
+  fontSize: 12,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 4,
+},
+editCurrentValue: {
+  fontSize: 15,
+  color: '#111827',
+  fontFamily: 'Inter_500Medium',
+},
+docEditBtn: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: '#EFF6FF',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+// Add to your styles object
+editGoalIconBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  gap: 8,
+  marginBottom: 16,
+},
+editGoalIconCircle: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editGoalNameBadge: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+},
+editGoalStats: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 8,
+},
+editGoalStat: {
+  flex: 1,
+  alignItems: 'center',
+},
+editGoalStatLabel: {
+  fontSize: 10,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 2,
+},
+editGoalStatValue: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#111827',
+},
+editGoalStatDivider: {
+  width: 1,
+  height: 30,
+  backgroundColor: '#E5E7EB',
+},
+editGoalProgressBar: {
+  height: 6,
+  backgroundColor: '#E5E7EB',
+  borderRadius: 3,
+  overflow: 'hidden',
+  marginBottom: 16,
+},
+editGoalProgressFill: {
+  height: '100%',
+  borderRadius: 3,
+},
+editGoalIconScroll: {
+  flexGrow: 0,
+  marginBottom: 16,
+  marginHorizontal: -24,
+  paddingHorizontal: 24,
+},
+editGoalIconOption: {
+  alignItems: 'center',
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 12,
+  backgroundColor: '#F3F4F6',
+  marginRight: 10,
+  gap: 4,
+  borderWidth: 2,
+  borderColor: 'transparent',
+},
+editGoalIconOptionActive: {
+  backgroundColor: '#EFF6FF',
+  borderColor: '#3B82F6',
+},
+editGoalIconText: {
+  fontSize: 10,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+},
+editGoalIconTextActive: {
+  color: '#3B82F6',
+  fontFamily: 'Inter_500Medium',
+},
+// ==================== EDIT NAME MODAL STYLES (Shared) ====================
+editModalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.5)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+editModalContent: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 24,
+  padding: 24,
+  width: '100%',
+  maxWidth: 400,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.1,
+  shadowRadius: 20,
+  elevation: 8,
+},
+editModalHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 20,
+},
+editModalTitle: {
+  fontSize: 20,
+  fontFamily: 'Inter_700Bold',
+  color: '#111827',
+},
+editModalLabel: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#374151',
+  marginBottom: 8,
+  marginTop: 8,
+},
+editModalInput: {
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  fontSize: 16,
+  color: '#111827',
+  fontFamily: 'Inter_400Regular',
+  backgroundColor: '#FFFFFF',
+  marginBottom: 16,
+},
+editModalActions: {
+  flexDirection: 'row',
+  gap: 12,
+  marginTop: 8,
+},
+editModalBtn: {
+  flex: 1,
+  paddingVertical: 14,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editModalCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editModalCancelText: {
+  fontSize: 16,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#6B7280',
+},
+editModalSave: {
+  backgroundColor: '#3B82F6',
+},
+editModalSaveText: {
+  fontSize: 16,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#FFFFFF',
+},
+docTypeIcon: {
+  width: 48,
+  height: 48,
+  borderRadius: 24,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 8,
+},
+docTypeName: {
+  fontSize: 13,
+  fontFamily: 'Inter_500Medium',
+  color: '#111827',
+},
+backToTypeBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  marginBottom: 12,
+},
+backToTypeBtnText: {
+  fontSize: 13,
+  color: '#3B82F6',
+  fontFamily: 'Inter_500Medium',
+},
+docTypeBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 6,
+  marginBottom: 12,
+},
+docTypeBadgeText: {
+  fontSize: 12,
+  fontFamily: 'Inter_600SemiBold',
+},
+autoGeneratedField: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  backgroundColor: '#F9FAFB',
+  marginBottom: 8,
+},
+autoGeneratedText: {
+  fontSize: 16,
+  fontFamily: 'Inter_500Medium',
+  color: '#1F2937',
+},
+autoGeneratedBadge: {
+  fontSize: 12,
+  fontFamily: 'Inter_400Regular',
+  color: '#6B7280',
+  backgroundColor: '#F3F4F6',
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: 6,
+},
+statusSelectorContainer: {
+  flexDirection: 'row',
+  gap: 12,
+  marginBottom: 8,
+},
+statusOption: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: '#E5E7EB',
+  backgroundColor: '#F9FAFB',
+  flex: 1,
+  justifyContent: 'center',
+},
+statusOptionPaidActive: {
+  borderColor: '#10B981',
+  backgroundColor: '#10B98115',
+},
+statusOptionUnpaidActive: {
+  borderColor: '#EF4444',
+  backgroundColor: '#EF444415',
+},
+statusDot: {
+  width: 10,
+  height: 10,
+  borderRadius: 5,
+},
+statusOptionText: {
+  fontSize: 14,
+  fontFamily: 'Inter_500Medium',
+  color: '#6B7280',
+},
+statusOptionTextActive: {
+  fontWeight: '600',
+  color: '#1F2937',
+},
+itemsHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginTop: 8,
+},
+addItemBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+  backgroundColor: '#EFF6FF',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 8,
+},
+addItemBtnText: {
+  fontSize: 12,
+  color: '#3B82F6',
+  fontFamily: 'Inter_500Medium',
+},
+emptyItems: {
+  padding: 20,
+  alignItems: 'center',
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+},
+emptyItemsText: {
+  fontSize: 14,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+},
+itemCard: {
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 12,
+},
+itemHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+itemNameInput: {
+  flex: 1,
+  fontSize: 15,
+  fontFamily: 'Inter_500Medium',
+  padding: 0,
+  color: '#111827',
+},
+itemRow: {
+  flexDirection: 'row',
+  gap: 12,
+},
+itemQty: {
+  flex: 1,
+},
+itemPrice: {
+  flex: 1,
+},
+itemTotal: {
+  flex: 1,
+  alignItems: 'flex-end',
+},
+itemLabel: {
+  fontSize: 11,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 4,
+},
+qtyInput: {
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 6,
+  fontSize: 14,
+  backgroundColor: '#FFFFFF',
+  textAlign: 'center',
+  fontFamily: 'Inter_400Regular',
+},
+priceInput: {
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 6,
+  fontSize: 14,
+  backgroundColor: '#FFFFFF',
+  fontFamily: 'Inter_400Regular',
+},
+totalText: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#111827',
+  marginTop: 4,
+},
+totalsSection: {
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 16,
+  marginTop: 12,
+},
+totalRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 6,
+},
+totalLabel: {
+  fontSize: 14,
+  fontFamily: 'Inter_500Medium',
+  color: '#374151',
+},
+grandTotal: {
+  borderTopWidth: 1,
+  borderTopColor: '#E5E7EB',
+  marginTop: 6,
+  paddingTop: 10,
+},
+grandTotalLabel: {
+  fontSize: 16,
+  fontFamily: 'Inter_700Bold',
+  color: '#111827',
+},
+grandTotalAmount: {
+  fontSize: 16,
+  fontFamily: 'Inter_700Bold',
+  color: '#3B82F6',
+},
+notesTextArea: {
+  minHeight: 80,
+  textAlignVertical: 'top',
+},
+formLabel: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#374151',
+  marginBottom: 8,
+  marginTop: 12,
+  fontFamily: 'Inter_600SemiBold',
+},
+formInput: {
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  fontSize: 15,
+  color: '#111827',
+  backgroundColor: '#FFFFFF',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 8,
+},
+submitBtn: {
+  borderRadius: 12,
+  overflow: 'hidden',
+  marginTop: 20,
+  marginBottom: 10,
+},
+submitBtnDisabled: {
+  opacity: 0.6,
+},
+submitGradient: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  paddingVertical: 14,
+},
+submitBtnText: {
+  color: '#FFF',
+  fontSize: 16,
+  fontWeight: '600',
+  fontFamily: 'Inter_600SemiBold',
 },
 expandedTxItem: {
   flexDirection: 'row',
@@ -8379,6 +11182,64 @@ typeBtn: {
 typeLabel: {
   fontSize: 15,
 },
+accountCardRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+accountActionButtons: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+accountActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
+},
+accountExpandBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editNameContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  flex: 1,
+},
+editNameInput: {
+  flex: 1,
+  fontSize: 15,
+  color: '#111827',
+  fontFamily: 'Inter_600SemiBold',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+},
+editNameActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editNameBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editNameCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editNameSave: {
+  backgroundColor: '#3B82F6',
+},
 section: {
   gap: 10,
 },
@@ -8411,6 +11272,65 @@ paymentScrollContent: {
   paddingHorizontal: 20,
   gap: 8,
   flexDirection: "row",
+},
+// Add to your styles object
+accountCardRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+accountActionButtons: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+accountActionBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F9FAFB',
+},
+accountExpandBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editNameContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  flex: 1,
+},
+editNameInput: {
+  flex: 1,
+  fontSize: 15,
+  color: '#111827',
+  fontFamily: 'Inter_600SemiBold',
+  borderBottomWidth: 1,
+  borderBottomColor: '#3B82F6',
+  paddingVertical: 2,
+  paddingHorizontal: 4,
+},
+editNameActions: {
+  flexDirection: 'row',
+  gap: 4,
+},
+editNameBtn: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editNameCancel: {
+  backgroundColor: '#F3F4F6',
+},
+editNameSave: {
+  backgroundColor: '#3B82F6',
 },
 paymentChip: {
   flexDirection: "row",
@@ -8446,6 +11366,67 @@ inputBox: {
   paddingHorizontal: 14,
   paddingVertical: 12,
   gap: 10,
+},
+// Add to your styles object
+editBudgetCategoryBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  gap: 8,
+  marginBottom: 16,
+},
+editBudgetCategoryIcon: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+editBudgetCategoryText: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+},
+editBudgetStats: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#F9FAFB',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 8,
+},
+editBudgetStat: {
+  flex: 1,
+  alignItems: 'center',
+},
+editBudgetStatLabel: {
+  fontSize: 10,
+  color: '#6B7280',
+  fontFamily: 'Inter_400Regular',
+  marginBottom: 2,
+},
+editBudgetStatValue: {
+  fontSize: 14,
+  fontFamily: 'Inter_600SemiBold',
+  color: '#111827',
+},
+editBudgetStatDivider: {
+  width: 1,
+  height: 30,
+  backgroundColor: '#E5E7EB',
+},
+editBudgetProgressBar: {
+  height: 6,
+  backgroundColor: '#E5E7EB',
+  borderRadius: 3,
+  overflow: 'hidden',
+  marginBottom: 16,
+},
+editBudgetProgressFill: {
+  height: '100%',
+  borderRadius: 3,
 },
 inputText: {
   flex: 1,
@@ -8731,55 +11712,46 @@ function AddTransactionModalContent({
   }, [user]);
 
   const handleSave = useCallback(async () => {
-  if (!isValid || parsedAmount === null) return;
-  if (!dateValid) {
-    Alert.alert("Invalid Date", "Please enter a date in YYYY-MM-DD format.");
-    return;
-  }
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-  const transactionData = {
-    type, amount: parsedAmount, category, note, date, paymentMode, attachment,
-    bookId: isPersonalMode ? "personal" : bookId || undefined,
-    goalId: selectedGoalId || null,
-  };
-
-  // ✅ ADD THESE LOGS
-  console.log("🔵🔵🔵 SAVING TRANSACTION FROM MODAL 🔵🔵🔵");
-  console.log("🔵 isPersonalMode:", isPersonalMode);
-  console.log("🔵 bookId from props:", bookId);
-  console.log("🔵 transactionData.bookId:", transactionData.bookId);
-  console.log("🔵 transactionData:", transactionData);
-
-  try {
-    if (editTx) {
-      console.log("🔵 UPDATING transaction:", editTx.id);
-      updateTransaction(editTx.id, transactionData);
-    } else {
-      console.log("🔵 ADDING NEW transaction");
-      if (selectedGoalId) {
-        await updateGoalAmount(selectedGoalId, parsedAmount, type);
-      }
-      addTransaction(transactionData);
+    if (!isValid || parsedAmount === null) return;
+    if (!dateValid) {
+      Alert.alert("Invalid Date", "Please enter a date in YYYY-MM-DD format.");
+      return;
     }
-    console.log("✅ Transaction saved successfully!");
-    
-    // ✅ JUST CLOSE THE MODAL - NOTHING ELSE
-    onClose();
-    
-  } catch (error) {
-    console.error("❌ Error saving transaction:", error);
-    Alert.alert("Error", "Failed to save transaction. Please try again.");
-  }
-}, [isValid, parsedAmount, dateValid, type, category, note, date, paymentMode, attachment, editTx, addTransaction, updateTransaction, isPersonalMode, bookId, selectedGoalId, onClose, updateGoalAmount]);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-const handleConfirmDelete = useCallback(() => {
-  if (!editTx) return;
-  deleteTransaction(editTx.id);
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  setShowDeleteConfirm(false);
-  onClose(); // ✅ JUST CLOSE
-}, [editTx, deleteTransaction, onClose]);
+    const transactionData = {
+      type, amount: parsedAmount, category, note, date, paymentMode, attachment,
+      bookId: isPersonalMode ? "personal" : bookId || undefined,
+      goalId: selectedGoalId || null,
+    };
+
+    try {
+      if (editTx) {
+        await updateTransaction(editTx.id, transactionData);
+      } else {
+        if (selectedGoalId) {
+          await updateGoalAmount(selectedGoalId, parsedAmount, type);
+        }
+        await addTransaction(transactionData);
+      }
+      console.log("✅ Transaction saved successfully!");
+      
+      // ✅ JUST CLOSE THE MODAL - NOTHING ELSE
+      onClose();
+      
+    } catch (error) {
+      console.error("❌ Error saving transaction:", error);
+      Alert.alert("Error", "Failed to save transaction. Please try again.");
+    }
+  }, [isValid, parsedAmount, dateValid, type, category, note, date, paymentMode, attachment, editTx, addTransaction, updateTransaction, isPersonalMode, bookId, selectedGoalId, onClose, updateGoalAmount]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!editTx) return;
+    deleteTransaction(editTx.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowDeleteConfirm(false);
+    onClose();
+  }, [editTx, deleteTransaction, onClose]);
 
   const pickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -9127,7 +12099,795 @@ const handleConfirmDelete = useCallback(() => {
   );
 }
 // ==================== MODAL STYLES ====================
+// ==================== EDIT DOCUMENT MODAL ====================
+function EditDocumentModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  document,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (field: string, value: string) => void;
+  document: Document | null;
+  loading?: boolean;
+}) {
+  const [editField, setEditField] = useState<string>("number");
+  const [editValue, setEditValue] = useState<string>("");
 
+  useEffect(() => {
+    if (document) {
+      setEditField("number");
+      setEditValue(document.number || "");
+    }
+  }, [document]);
+
+  if (!document) return null;
+
+  const fields = [
+    { key: "number", label: "Document Number", placeholder: "Enter document number" },
+    { key: "partyName", label: "Party Name", placeholder: "Enter party name" },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={[styles.editModalContent, { maxHeight: "80%" }]}>
+          <View style={styles.editModalHeader}>
+            <Text style={styles.editModalTitle}>Edit Document</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={24} color="#6B7280" />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Document Type Badge */}
+            <View style={[styles.editDocTypeBadge, { backgroundColor: '#3B82F615' }]}>
+              <Feather name="file-text" size={14} color="#3B82F6" />
+              <Text style={[styles.editDocTypeText, { color: '#3B82F6' }]}>{document.type}</Text>
+            </View>
+
+            {/* Field Selector */}
+            <Text style={styles.editModalLabel}>Select Field to Edit</Text>
+            <View style={styles.editFieldSelector}>
+              {fields.map((field) => (
+                <Pressable
+                  key={field.key}
+                  onPress={() => {
+                    setEditField(field.key);
+                    setEditValue(document[field.key as keyof Document] as string || "");
+                  }}
+                  style={[
+                    styles.editFieldChip,
+                    editField === field.key && styles.editFieldChipActive
+                  ]}
+                >
+                  <Text style={[
+                    styles.editFieldChipText,
+                    editField === field.key && styles.editFieldChipTextActive
+                  ]}>
+                    {field.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Current Value Display */}
+            <View style={styles.editCurrentValueContainer}>
+              <Text style={styles.editCurrentLabel}>Current Value:</Text>
+              <Text style={styles.editCurrentValue}>
+                {document[editField as keyof Document] as string || "Not set"}
+              </Text>
+            </View>
+
+            {/* Edit Input */}
+            <Text style={styles.editModalLabel}>New Value</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={editValue}
+              onChangeText={setEditValue}
+              placeholder={fields.find(f => f.key === editField)?.placeholder || "Enter value"}
+              placeholderTextColor="#9CA3AF"
+              autoFocus
+            />
+
+            {/* Action Buttons */}
+            <View style={styles.editModalActions}>
+              <Pressable 
+                onPress={onClose} 
+                style={[styles.editModalBtn, styles.editModalCancel]}
+              >
+                <Text style={styles.editModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable 
+                onPress={() => {
+                  if (!editValue.trim()) {
+                    Alert.alert("Error", "Value cannot be empty");
+                    return;
+                  }
+                  onSave(editField, editValue.trim());
+                }} 
+                style={[styles.editModalBtn, styles.editModalSave]} 
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.editModalSaveText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+// ==================== EDIT TRANSACTION MODAL ====================
+function EditTransactionModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  transaction,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (data: any) => void;
+  transaction: Transaction | null;
+  loading?: boolean;
+}) {
+  const [type, setType] = useState<"income" | "expense">("income");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState("");
+  const [paymentMode, setPaymentMode] = useState("cash");
+
+  // Load transaction data when it changes
+  useEffect(() => {
+    if (transaction) {
+      setType(transaction.type || "income");
+      setAmount(String(transaction.amount || ""));
+      setCategory(transaction.category || "");
+      setNote(transaction.note || "");
+      setDate(transaction.date || new Date().toISOString().split("T")[0]);
+      setPaymentMode(transaction.paymentMode || "cash");
+    }
+  }, [transaction]);
+
+  if (!transaction) return null;
+
+  const isPersonalMode = true;
+  const currencyCode = getCurrencyCode();
+  const currencySymbol = getCurrencySymbol();
+
+  // Categories based on type
+  const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+
+  const isValid = amount && parseFloat(amount) > 0 && category;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={[styles.editModalContent, { maxHeight: "90%", padding: 0 }]}>
+          <View style={styles.editModalHeader}>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+            {/* Type Toggle */}
+            <Text style={styles.editModalLabel}>Type</Text>
+            <View style={styles.editTypeToggle}>
+              <Pressable
+                onPress={() => { setType("income"); setCategory(""); }}
+                style={[styles.editTypeBtn, type === "income" && styles.editTypeBtnIncome]}
+              >
+                <Feather name="trending-up" size={16} color={type === "income" ? "#10B981" : "#6B7280"} />
+                <Text style={[styles.editTypeText, type === "income" && styles.editTypeTextIncome]}>Income</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setType("expense"); setCategory(""); }}
+                style={[styles.editTypeBtn, type === "expense" && styles.editTypeBtnExpense]}
+              >
+                <Feather name="trending-down" size={16} color={type === "expense" ? "#EF4444" : "#6B7280"} />
+                <Text style={[styles.editTypeText, type === "expense" && styles.editTypeTextExpense]}>Expense</Text>
+              </Pressable>
+            </View>
+
+            {/* Amount */}
+            <Text style={styles.editModalLabel}>Amount ({currencyCode})</Text>
+            <View style={styles.editAmountRow}>
+              <Text style={styles.editAmountSymbol}>{currencySymbol}</Text>
+              <TextInput
+                style={styles.editAmountInput}
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0.00"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            {/* Category */}
+            <Text style={styles.editModalLabel}>Category</Text>
+            <View style={styles.editCategoryGrid}>
+              {categories.slice(0, 8).map((cat) => (
+                <Pressable
+                  key={cat}
+                  onPress={() => setCategory(cat)}
+                  style={[
+                    styles.editCategoryChip,
+                    category === cat && { backgroundColor: type === "income" ? '#10B98120' : '#EF444420' }
+                  ]}
+                >
+                  <Text style={[
+                    styles.editCategoryText,
+                    category === cat && { color: type === "income" ? '#10B981' : '#EF4444' }
+                  ]}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Payment Mode */}
+            <Text style={styles.editModalLabel}>Payment Mode</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.editPaymentScroll}>
+              {PAYMENT_MODES.map((mode) => (
+                <Pressable
+                  key={mode.id}
+                  onPress={() => setPaymentMode(mode.id)}
+                  style={[
+                    styles.editPaymentChip,
+                    paymentMode === mode.id && styles.editPaymentChipActive
+                  ]}
+                >
+                  <Feather name={mode.icon} size={14} color={paymentMode === mode.id ? "#3B82F6" : "#6B7280"} />
+                  <Text style={[styles.editPaymentText, paymentMode === mode.id && styles.editPaymentTextActive]}>
+                    {mode.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {/* Date */}
+            <Text style={styles.editModalLabel}>Date</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            {/* Note */}
+            <Text style={styles.editModalLabel}>Note (optional)</Text>
+            <TextInput
+              style={[styles.editModalInput, styles.editTextArea]}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Add a note..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={2}
+            />
+
+            {/* Actions */}
+            <View style={styles.editModalActions}>
+              <Pressable onPress={onClose} style={[styles.editModalBtn, styles.editModalCancel]}>
+                <Text style={styles.editModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable 
+                onPress={() => {
+                  if (!isValid) {
+                    Alert.alert("Error", "Please fill in all required fields");
+                    return;
+                  }
+                  onSave({
+                    type,
+                    amount: parseFloat(amount),
+                    category,
+                    note,
+                    date,
+                    paymentMode,
+                  });
+                }} 
+                style={[styles.editModalBtn, styles.editModalSave]} 
+                disabled={loading || !isValid}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.editModalSaveText}>Update</Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+// ==================== EDIT ACCOUNT NAME MODAL ====================
+function EditAccountNameModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  accountName,
+  accountType,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (name: string) => void;
+  accountName: string;
+  accountType?: string;
+  loading?: boolean;
+}) {
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setName(accountName);
+    }
+  }, [visible, accountName]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={styles.editModalContent}>
+          <View style={styles.editModalHeader}>
+            <Text style={styles.editModalTitle}>Edit Account Name</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={24} color="#6B7280" />
+            </Pressable>
+          </View>
+
+          {accountType && (
+            <View style={styles.editAccountTypeBadge}>
+              <Feather name="briefcase" size={14} color="#3B82F6" />
+              <Text style={styles.editAccountTypeText}>{accountType}</Text>
+            </View>
+          )}
+
+          <Text style={styles.editModalLabel}>Account Name</Text>
+          <TextInput
+            style={styles.editModalInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter account name"
+            placeholderTextColor="#9CA3AF"
+            autoFocus
+            onSubmitEditing={() => {
+              if (name.trim()) {
+                onSave(name.trim());
+              }
+            }}
+          />
+
+          <View style={styles.editModalActions}>
+            <Pressable onPress={onClose} style={[styles.editModalBtn, styles.editModalCancel]}>
+              <Text style={styles.editModalCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable 
+              onPress={() => {
+                if (!name.trim()) {
+                  Alert.alert("Error", "Account name cannot be empty");
+                  return;
+                }
+                onSave(name.trim());
+              }} 
+              style={[styles.editModalBtn, styles.editModalSave]} 
+              disabled={loading || !name.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.editModalSaveText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+// ==================== EDIT BUDGET MODAL ====================
+function EditBudgetModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  budget,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (budgetId: string, amount: number) => void;
+  budget: { id: string; category: string; budget: number; spent: number; icon: string; color: string } | null;
+  loading?: boolean;
+}) {
+  const [amount, setAmount] = useState("");
+
+  useEffect(() => {
+    if (budget && visible) {
+      setAmount(String(budget.budget));
+    }
+  }, [budget, visible]);
+
+  if (!budget) return null;
+
+  const currencyCode = getCurrencyCode();
+  const spentPercent = budget.budget > 0 ? (budget.spent / budget.budget) * 100 : 0;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={styles.editModalContent}>
+          <View style={styles.editModalHeader}>
+            <Text style={styles.editModalTitle}>Edit Budget</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={24} color="#6B7280" />
+            </Pressable>
+          </View>
+
+          {/* Category Badge */}
+          <View style={[styles.editBudgetCategoryBadge, { backgroundColor: budget.color + '15' }]}>
+            <View style={[styles.editBudgetCategoryIcon, { backgroundColor: budget.color + '20' }]}>
+              <Feather name={budget.icon as any} size={16} color={budget.color} />
+            </View>
+            <Text style={[styles.editBudgetCategoryText, { color: budget.color }]}>
+              {budget.category}
+            </Text>
+          </View>
+
+          {/* Current Stats */}
+          <View style={styles.editBudgetStats}>
+            <View style={styles.editBudgetStat}>
+              <Text style={styles.editBudgetStatLabel}>Spent</Text>
+              <Text style={styles.editBudgetStatValue}>{currencyCode} {budget.spent.toLocaleString()}</Text>
+            </View>
+            <View style={styles.editBudgetStatDivider} />
+            <View style={styles.editBudgetStat}>
+              <Text style={styles.editBudgetStatLabel}>Current Budget</Text>
+              <Text style={styles.editBudgetStatValue}>{currencyCode} {budget.budget.toLocaleString()}</Text>
+            </View>
+            <View style={styles.editBudgetStatDivider} />
+            <View style={styles.editBudgetStat}>
+              <Text style={styles.editBudgetStatLabel}>Progress</Text>
+              <Text style={[styles.editBudgetStatValue, { color: spentPercent > 100 ? '#EF4444' : '#10B981' }]}>
+                {Math.round(spentPercent)}%
+              </Text>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.editBudgetProgressBar}>
+            <View style={[styles.editBudgetProgressFill, { 
+              width: `${Math.min(spentPercent, 100)}%`, 
+              backgroundColor: spentPercent > 100 ? '#EF4444' : budget.color 
+            }]} />
+          </View>
+
+          {/* Amount Input */}
+          <Text style={styles.editModalLabel}>New Budget Amount ({currencyCode})</Text>
+          <TextInput
+            style={styles.editModalInput}
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="Enter budget amount"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="numeric"
+            autoFocus
+            onSubmitEditing={() => {
+              const val = parseFloat(amount);
+              if (!isNaN(val) && val > 0) {
+                onSave(budget.id, val);
+              }
+            }}
+          />
+
+          <View style={styles.editModalActions}>
+            <Pressable onPress={onClose} style={[styles.editModalBtn, styles.editModalCancel]}>
+              <Text style={styles.editModalCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable 
+              onPress={() => {
+                const val = parseFloat(amount);
+                if (isNaN(val) || val <= 0) {
+                  Alert.alert("Error", "Please enter a valid budget amount");
+                  return;
+                }
+                onSave(budget.id, val);
+              }} 
+              style={[styles.editModalBtn, styles.editModalSave]} 
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.editModalSaveText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+// ==================== EDIT GOAL MODAL ====================
+function EditGoalModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  goal,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (goalId: string, name: string, targetAmount: number) => void;
+  goal: { id: string; name: string; targetAmount: number; savedAmount: number; icon: string; color: string; deadline?: string } | null;
+  loading?: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [targetAmount, setTargetAmount] = useState("");
+  const [deadline, setDeadline] = useState("");
+
+  useEffect(() => {
+    if (goal && visible) {
+      setName(goal.name);
+      setTargetAmount(String(goal.targetAmount));
+      setDeadline(goal.deadline || "");
+    }
+  }, [goal, visible]);
+
+  if (!goal) return null;
+
+  const currencyCode = getCurrencyCode();
+  const progress = goal.targetAmount > 0 ? (goal.savedAmount / goal.targetAmount) * 100 : 0;
+
+  const goalIcons = [
+    { id: "target", name: "Target", icon: "target" },
+    { id: "shield", name: "Emergency", icon: "shield" },
+    { id: "truck", name: "Car", icon: "truck" },
+    { id: "map", name: "Travel", icon: "map" },
+    { id: "home", name: "House", icon: "home" },
+    { id: "book", name: "Education", icon: "book" },
+    { id: "heart", name: "Health", icon: "heart" },
+    { id: "briefcase", name: "Business", icon: "briefcase" },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={[styles.editModalContent, { maxHeight: "85%" }]}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Edit Goal</Text>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Feather name="x" size={24} color="#6B7280" />
+              </Pressable>
+            </View>
+
+            {/* Goal Icon and Color */}
+            <View style={[styles.editGoalIconBadge, { backgroundColor: goal.color + '15' }]}>
+              <View style={[styles.editGoalIconCircle, { backgroundColor: goal.color + '20' }]}>
+                <Feather name={goal.icon as any} size={24} color={goal.color} />
+              </View>
+              <Text style={[styles.editGoalNameBadge, { color: goal.color }]}>
+                {goal.name}
+              </Text>
+            </View>
+
+            {/* Current Stats */}
+            <View style={styles.editGoalStats}>
+              <View style={styles.editGoalStat}>
+                <Text style={styles.editGoalStatLabel}>Saved</Text>
+                <Text style={styles.editGoalStatValue}>{currencyCode} {goal.savedAmount.toLocaleString()}</Text>
+              </View>
+              <View style={styles.editGoalStatDivider} />
+              <View style={styles.editGoalStat}>
+                <Text style={styles.editGoalStatLabel}>Target</Text>
+                <Text style={styles.editGoalStatValue}>{currencyCode} {goal.targetAmount.toLocaleString()}</Text>
+              </View>
+              <View style={styles.editGoalStatDivider} />
+              <View style={styles.editGoalStat}>
+                <Text style={styles.editGoalStatLabel}>Progress</Text>
+                <Text style={[styles.editGoalStatValue, { color: progress >= 100 ? '#10B981' : goal.color }]}>
+                  {Math.round(progress)}%
+                </Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.editGoalProgressBar}>
+              <View style={[styles.editGoalProgressFill, { 
+                width: `${Math.min(progress, 100)}%`, 
+                backgroundColor: progress >= 100 ? '#10B981' : goal.color 
+              }]} />
+            </View>
+
+            {/* Goal Name Input */}
+            <Text style={styles.editModalLabel}>Goal Name</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={name}
+              onChangeText={setName}
+              placeholder="Enter goal name"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            {/* Target Amount Input */}
+            <Text style={styles.editModalLabel}>Target Amount ({currencyCode})</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={targetAmount}
+              onChangeText={setTargetAmount}
+              placeholder="Enter target amount"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+
+            {/* Deadline Input */}
+            <Text style={styles.editModalLabel}>Deadline (Optional)</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={deadline}
+              onChangeText={setDeadline}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            {/* Icon Selector */}
+            <Text style={styles.editModalLabel}>Icon</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.editGoalIconScroll}>
+              {goalIcons.map((icon) => (
+                <Pressable 
+                  key={icon.id} 
+                  onPress={() => {
+                    // Update icon in parent
+                    const updatedGoal = { ...goal, icon: icon.icon };
+                    // You can add icon update logic here if needed
+                  }} 
+                  style={[
+                    styles.editGoalIconOption,
+                    goal.icon === icon.icon && styles.editGoalIconOptionActive
+                  ]}
+                >
+                  <Feather name={icon.icon as any} size={20} color={goal.icon === icon.icon ? '#3B82F6' : '#9CA3AF'} />
+                  <Text style={[styles.editGoalIconText, goal.icon === icon.icon && styles.editGoalIconTextActive]}>
+                    {icon.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.editModalActions}>
+              <Pressable onPress={onClose} style={[styles.editModalBtn, styles.editModalCancel]}>
+                <Text style={styles.editModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable 
+                onPress={() => {
+                  if (!name.trim()) {
+                    Alert.alert("Error", "Goal name cannot be empty");
+                    return;
+                  }
+                  const target = parseFloat(targetAmount);
+                  if (isNaN(target) || target <= 0) {
+                    Alert.alert("Error", "Please enter a valid target amount");
+                    return;
+                  }
+                  onSave(goal.id, name.trim(), target);
+                }} 
+                style={[styles.editModalBtn, styles.editModalSave]} 
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.editModalSaveText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+// ==================== EDIT BOOK MODAL ====================
+function EditBookModal({ 
+  visible, 
+  onClose, 
+  onSave,
+  bookName,
+  bookDescription,
+  loading = false
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  onSave: (name: string, description: string) => void;
+  bookName: string;
+  bookDescription?: string;
+  loading?: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setName(bookName);
+      setDescription(bookDescription || "");
+    }
+  }, [visible, bookName, bookDescription]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.editModalOverlay}>
+        <View style={styles.editModalContent}>
+          <View style={styles.editModalHeader}>
+            <Text style={styles.editModalTitle}>Edit Book</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Feather name="x" size={24} color="#6B7280" />
+            </Pressable>
+          </View>
+
+          {/* Book Icon Badge */}
+          <View style={styles.editBookBadge}>
+            <Feather name="book-open" size={20} color="#8B5CF6" />
+            <Text style={styles.editBookBadgeText}>Business Book</Text>
+          </View>
+
+          {/* Book Name Input */}
+          <Text style={styles.editModalLabel}>Book Name</Text>
+          <TextInput
+            style={styles.editModalInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter book name"
+            placeholderTextColor="#9CA3AF"
+            autoFocus
+          />
+
+          {/* Book Description Input */}
+          <Text style={styles.editModalLabel}>Description (Optional)</Text>
+          <TextInput
+            style={[styles.editModalInput, styles.editTextArea]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Enter book description"
+            placeholderTextColor="#9CA3AF"
+            multiline
+            numberOfLines={3}
+          />
+
+          <View style={styles.editModalActions}>
+            <Pressable onPress={onClose} style={[styles.editModalBtn, styles.editModalCancel]}>
+              <Text style={styles.editModalCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable 
+              onPress={() => {
+                if (!name.trim()) {
+                  Alert.alert("Error", "Book name cannot be empty");
+                  return;
+                }
+                onSave(name.trim(), description.trim());
+              }} 
+              style={[styles.editModalBtn, styles.editModalSave]} 
+              disabled={loading || !name.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.editModalSaveText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 export default function OverviewScreen() {
   const params = useLocalSearchParams<{ dashboardMode?: string; _t?: string }>();
   const { activeBook, setActiveBook } = useApp();
