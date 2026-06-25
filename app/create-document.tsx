@@ -1,6 +1,5 @@
-// app/create-document.tsx - COMPLETELY FIXED (No duplicates)
-import React, { useState, useEffect, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
+// app/create-document.tsx - WITH TYPE SELECTOR & AUTO-REDIRECT
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "@/context/AppContext";
 import { getCurrencyCode, getCurrencySymbol, subscribeToCurrencyChanges } from "@/utils/format";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// IMPORTANT: Use exact names that match DOCUMENT_CONFIG in invoices.tsx
+
 type DocumentType = "Invoice" | "Quote" | "Credit Note" | "Purchase Order" | "Delivery Note";
 
 interface LineItem {
@@ -30,26 +29,43 @@ interface LineItem {
   total: number;
 }
 
+// Document type configuration
+const DOCUMENT_TYPES = [
+  { type: "Invoice" as DocumentType, icon: "file-text", color: "#3B82F6", label: "Invoice" },
+  { type: "Quote" as DocumentType, icon: "file", color: "#10B981", label: "Quote" },
+  { type: "Credit Note" as DocumentType, icon: "credit-card", color: "#8B5CF6", label: "Credit Note" },
+  { type: "Purchase Order" as DocumentType, icon: "package", color: "#EC4899", label: "Purchase Order" },
+  { type: "Delivery Note" as DocumentType, icon: "truck", color: "#F59E0B", label: "Delivery Note" },
+];
+
 export default function CreateDocumentPage() {
   const insets = useSafeAreaInsets();
   const { type } = useLocalSearchParams<{ type: string }>();
+  const [showTypeSelector, setShowTypeSelector] = useState(!type);
+  const [selectedType, setSelectedType] = useState<DocumentType>("Invoice");
   
   // Convert URL param to exact document type name
-  let documentType: DocumentType = "Invoice";
-  if (type === "invoice") documentType = "Invoice";
-  else if (type === "quote") documentType = "Quote";
-  else if (type === "credit-note") documentType = "Credit Note";
-  else if (type === "purchase-order") documentType = "Purchase Order";
-  else if (type === "delivery-note") documentType = "Delivery Note";
+  useEffect(() => {
+    if (type) {
+      let docType: DocumentType = "Invoice";
+      if (type === "invoice") docType = "Invoice";
+      else if (type === "quote") docType = "Quote";
+      else if (type === "credit-note") docType = "Credit Note";
+      else if (type === "purchase-order") docType = "Purchase Order";
+      else if (type === "delivery-note") docType = "Delivery Note";
+      setSelectedType(docType);
+      setShowTypeSelector(false);
+    }
+  }, [type]);
   
-  const { addDocument, activeBook } = useApp();
+  const { addDocument } = useApp();
 
   // Common fields
   const [partyName, setPartyName] = useState("");
   const [documentDate, setDocumentDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   
-  // ✅ NEW: Invoice Status field
+  // Invoice Status field
   const [invoiceStatus, setInvoiceStatus] = useState<"paid" | "unpaid">("unpaid");
   
   // Fields for Credit Note, Purchase Order, Quote (NOT for Invoice)
@@ -60,6 +76,8 @@ export default function CreateDocumentPage() {
   const [taxRate, setTaxRate] = useState(14);
   const [notes, setNotes] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loading, setLoading] = useState(false);
+  
   const currencyCode = getCurrencyCode();
   const currencySymbol = getCurrencySymbol();
 
@@ -70,7 +88,7 @@ export default function CreateDocumentPage() {
     });
     return unsubscribe;
   }, []);
-  
+
   const formatAmount = (amount: number) => `${currencyCode} ${amount.toLocaleString('en-EG')}`;
   const topPad = insets.top + (Platform.OS === "web" ? 16 : 8);
 
@@ -86,7 +104,7 @@ export default function CreateDocumentPage() {
       "Credit Note": "CN",
       "Purchase Order": "PO",
       "Delivery Note": "DN"
-    }[documentType];
+    }[selectedType];
     return `${prefix}-${Date.now().toString().slice(-8)}`;
   };
 
@@ -126,121 +144,214 @@ export default function CreateDocumentPage() {
 
   // Check if document type needs reference and order fields
   const needsReferenceAndOrder = () => {
-    return ["Credit Note", "Purchase Order", "Quote"].includes(documentType);
+    return ["Credit Note", "Purchase Order", "Quote"].includes(selectedType);
   };
 
   // Check if document type is Invoice (needs status)
   const isInvoice = () => {
-    return documentType === "Invoice";
+    return selectedType === "Invoice";
   };
 
   // Get document label for customer/vendor
   const getPartyLabel = () => {
-    if (documentType === "Credit Note") return "Customer Name";
-    if (documentType === "Purchase Order") return "Vendor Name";
-    if (documentType === "Delivery Note") return "Customer Name";
-    if (documentType === "Quote") return "Customer Name";
-    if (documentType === "Invoice") return "Party Name";
+    if (selectedType === "Credit Note") return "Customer Name";
+    if (selectedType === "Purchase Order") return "Vendor Name";
+    if (selectedType === "Delivery Note") return "Customer Name";
+    if (selectedType === "Quote") return "Customer Name";
+    if (selectedType === "Invoice") return "Party Name";
     return "Party Name";
   };
 
-  // app/create-document.tsx - Updated handleSave function
-
-const handleSave = async () => {
-  console.log("🔵🔵🔵 SAVE BUTTON PRESSED 🔵🔵🔵");
-  console.log("📄 Document Type:", documentType);
-  console.log("📄 Invoice Status:", invoiceStatus);
-  
-  if (!partyName.trim()) {
-    Alert.alert("Error", `Please enter ${getPartyLabel().toLowerCase()}`);
-    return;
-  }
-  if (items.length === 0) {
-    Alert.alert("Error", "Please add at least one item");
-    return;
-  }
-  
-  try {
-    const newDocument: any = {
-      number: getDocumentNumber(),
-      type: documentType,
-      partyName: partyName.trim(),
-      amount: total,
-      date: documentDate,
-      dueDate: dueDate || getDefaultDueDate(),
-      notes: notes,
-      items: items,
-      bookId: "", // or null
-      userId: "", // or null
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      status: "unpaid", // Default status
-    };
+  // Handle save
+  const handleSave = async () => {
+    console.log("🔵🔵🔵 SAVE BUTTON PRESSED 🔵🔵🔵");
+    console.log("📄 Document Type:", selectedType);
+    console.log("📄 Invoice Status:", invoiceStatus);
     
-    // For Invoice documents, use the selected status
-    if (isInvoice()) {
-      newDocument.status = invoiceStatus;
-      newDocument.invoiceStatus = invoiceStatus;
+    if (!partyName.trim()) {
+      Alert.alert("Error", `Please enter ${getPartyLabel().toLowerCase()}`);
+      return;
+    }
+    if (items.length === 0) {
+      Alert.alert("Error", "Please add at least one item");
+      return;
     }
     
-    if (needsReferenceAndOrder()) {
-      newDocument.referenceNo = referenceNo;
-      newDocument.orderNo = orderNo;
-    }
+    setLoading(true);
     
-    console.log("🔵 Saving document with status:", newDocument.status);
-    console.log("🔵 Full document:", newDocument);
-    
-    // Use addDocument if available, otherwise save directly
-    if (typeof addDocument === 'function') {
-      await addDocument(newDocument);
-      console.log("✅ Document saved via addDocument!");
-    } else {
-      // Save directly to Firestore
-      const { db } = await import('@/config/firebase');
-      const { collection, addDoc, Timestamp } = await import('firebase/firestore');
-      
-      const firestoreData = {
-        ...newDocument,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+    try {
+      const newDocument: any = {
+        number: getDocumentNumber(),
+        type: selectedType,
+        partyName: partyName.trim(),
+        amount: total,
+        date: documentDate,
+        dueDate: dueDate || getDefaultDueDate(),
+        notes: notes,
+        items: items,
+        bookId: "",
+        userId: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: "unpaid",
       };
       
-      await addDoc(collection(db, 'documents'), firestoreData);
-      console.log("✅ Document saved directly to Firestore!");
-    }
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
-    // ✅ FIX: Store the return page in AsyncStorage before navigating back
-    await AsyncStorage.setItem("return_to_page", "docs");
-    
-    Alert.alert("Success", `${documentType} created successfully!`, [
-      { 
-        text: "OK", 
-        onPress: () => {
-          // ✅ Navigate back to the documents page
-          router.back();
-        }
+      // For Invoice documents, use the selected status
+      if (isInvoice()) {
+        newDocument.status = invoiceStatus;
+        newDocument.invoiceStatus = invoiceStatus;
       }
-    ]);
-  } catch (error: any) {
-    console.error("🔴 Save error:", error);
-    Alert.alert("Error", error.message || "Failed to save document");
-  }
-};
+      
+      if (needsReferenceAndOrder()) {
+        newDocument.referenceNo = referenceNo;
+        newDocument.orderNo = orderNo;
+      }
+      
+      console.log("🔵 Saving document with status:", newDocument.status);
+      console.log("🔵 Full document:", newDocument);
+      
+      // Use addDocument if available, otherwise save directly
+      if (typeof addDocument === 'function') {
+        await addDocument(newDocument);
+        console.log("✅ Document saved via addDocument!");
+      } else {
+        // Save directly to Firestore
+        const { db } = await import('@/config/firebase');
+        const { collection, addDoc, Timestamp } = await import('firebase/firestore');
+        
+        const firestoreData = {
+          ...newDocument,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        
+        await addDoc(collection(db, 'documents'), firestoreData);
+        console.log("✅ Document saved directly to Firestore!");
+      }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // ✅ Store the return page in AsyncStorage
+      await AsyncStorage.setItem("return_to_page", "docs");
+      
+      // ✅ Also store a flag to refresh the documents list
+      await AsyncStorage.setItem("refresh_documents", Date.now().toString());
+      
+      // ✅ Auto-redirect after 1 second
+      Alert.alert("Success", `${selectedType} created successfully!`, [
+        { 
+          text: "OK", 
+          onPress: () => {
+            router.replace("/(tabs)");
+          }
+        }
+      ]);
+      
+      // ✅ Auto-close after 2 seconds even if user doesn't tap OK
+      setTimeout(() => {
+        router.replace("/(tabs)");
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error("🔴 Save error:", error);
+      Alert.alert("Error", error.message || "Failed to save document");
+      setLoading(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // =============================================
+  // TYPE SELECTOR VIEW
+  // =============================================
+  if (showTypeSelector) {
+    return (
+      <View style={[styles.container, { backgroundColor: "#FFFFFF", paddingTop: topPad }]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Feather name="arrow-left" size={24} color="#000" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Select Document Type</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.subHeaderText}>Choose the type of document you want to create</Text>
+          
+          <View style={styles.docTypeGrid}>
+            {DOCUMENT_TYPES.map((doc) => (
+              <Pressable
+                key={doc.type}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  const typeParam = doc.type.toLowerCase().replace(/\s/g, '-');
+                  router.replace(`/create-document?type=${typeParam}`);
+                }}
+                style={[
+                  styles.docTypeOption,
+                  { backgroundColor: doc.color + "10", borderColor: doc.color + "30" }
+                ]}
+              >
+                <View style={[styles.docTypeIcon, { backgroundColor: doc.color + "20" }]}>
+                  <Feather name={doc.icon as any} size={28} color={doc.color} />
+                </View>
+                <Text style={[styles.docTypeName, { color: doc.color }]}>{doc.type}</Text>
+              </Pressable>
+            ))}
+          </View>
+          
+          {/* AI Generate Option */}
+          <Pressable 
+            onPress={() => {
+              Alert.alert("AI Generation", "AI document generation coming soon!");
+            }} 
+            style={styles.aiGenerateOption}
+          >
+            <View style={styles.aiContent}>
+              <View>
+                <Text style={styles.aiTitle}>Generate with AI</Text>
+                <Text style={styles.aiSubtitle}>Create any document using AI</Text>
+              </View>
+              <View style={styles.aiRobotIcon}>
+                <Feather name="cpu" size={40} color="#8B5CF6" />
+              </View>
+            </View>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // =============================================
+  // DOCUMENT FORM VIEW
+  // =============================================
   return (
-    <View style={[styles.container, { backgroundColor: "#FFFFFF", paddingTop: topPad }]}>
+    <View key={refreshKey} style={[styles.container, { backgroundColor: "#FFFFFF", paddingTop: topPad }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={() => {
+          // Go back to type selector instead of previous page
+          setShowTypeSelector(true);
+          router.replace("/create-document");
+        }} hitSlop={8}>
           <Feather name="arrow-left" size={24} color="#000" />
         </Pressable>
-        <Text style={styles.headerTitle}>Create {documentType}</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>Create {selectedType}</Text>
+        <Pressable onPress={handleSave} disabled={loading} hitSlop={8}>
+          <Text style={[styles.saveText, { color: loading ? "#9CA3AF" : "#3B82F6", fontFamily: "Inter_600SemiBold" }]}>
+            {loading ? "Saving..." : "Save"}
+          </Text>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Document Type Badge */}
+        <View style={[styles.docTypeBadge, { backgroundColor: DOCUMENT_TYPES.find(d => d.type === selectedType)?.color + "15" }]}>
+          <Feather name={DOCUMENT_TYPES.find(d => d.type === selectedType)?.icon as any} size={16} color={DOCUMENT_TYPES.find(d => d.type === selectedType)?.color} />
+          <Text style={[styles.docTypeBadgeText, { color: DOCUMENT_TYPES.find(d => d.type === selectedType)?.color }]}>
+            {selectedType}
+          </Text>
+        </View>
+
         {/* Document Number (Auto-generated display) */}
         <Text style={styles.label}>Document No.</Text>
         <View style={styles.autoGeneratedField}>
@@ -277,7 +388,7 @@ const handleSave = async () => {
           onChangeText={setDueDate}
         />
 
-        {/* ✅ NEW: Invoice Status Selector - Only for Invoice documents */}
+        {/* Invoice Status Selector - Only for Invoice documents */}
         {isInvoice() && (
           <>
             <Text style={styles.label}>Invoice Status</Text>
@@ -328,7 +439,7 @@ const handleSave = async () => {
           </>
         )}
 
-        {/* Reference No and Order No - ONLY for Credit Note, Purchase Order, Quote (NOT for Invoice) */}
+        {/* Reference No and Order No - ONLY for Credit Note, Purchase Order, Quote */}
         {needsReferenceAndOrder() && (
           <>
             <Text style={styles.label}>Reference No.</Text>
@@ -433,9 +544,13 @@ const handleSave = async () => {
         />
 
         {/* Save Button */}
-        <Pressable onPress={handleSave} style={styles.saveButton}>
-          <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.saveGradient}>
-            <Text style={styles.saveButtonText}>Create {documentType}</Text>
+        <Pressable onPress={handleSave} disabled={loading} style={[styles.saveButton, loading && styles.saveButtonDisabled]}>
+          <LinearGradient colors={loading ? ['#9CA3AF', '#9CA3AF'] : ['#3B82F6', '#2563EB']} style={styles.saveGradient}>
+            {loading ? (
+              <Text style={styles.saveButtonText}>Saving...</Text>
+            ) : (
+              <Text style={styles.saveButtonText}>Create {selectedType}</Text>
+            )}
           </LinearGradient>
         </Pressable>
       </ScrollView>
@@ -455,7 +570,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F0F0F0",
   },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: "#000" },
+  saveText: { fontSize: 16 },
   scrollContent: { padding: 20, paddingBottom: 40 },
+  subHeaderText: { fontSize: 14, color: "#6B7280", fontFamily: "Inter_400Regular", marginBottom: 20 },
   label: { fontSize: 14, fontFamily: "Inter_500Medium", color: "#374151", marginBottom: 8, marginTop: 12 },
   input: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, fontFamily: "Inter_400Regular", marginBottom: 8 },
   itemsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, marginBottom: 12 },
@@ -482,6 +599,7 @@ const styles = StyleSheet.create({
   grandTotalAmount: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#3B82F6" },
   notesInput: { height: 80, textAlignVertical: "top" },
   saveButton: { marginTop: 24, borderRadius: 12, overflow: "hidden" },
+  saveButtonDisabled: { opacity: 0.6 },
   saveGradient: { paddingVertical: 16, alignItems: "center" },
   saveButtonText: { color: "#FFFFFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   autoGeneratedField: {
@@ -510,7 +628,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  // ✅ NEW: Status Selector Styles
+  // Status Selector Styles
   statusSelectorContainer: {
     flexDirection: "row",
     gap: 12,
@@ -550,5 +668,79 @@ const styles = StyleSheet.create({
   statusOptionTextActive: {
     fontWeight: "600",
     color: "#1F2937",
+  },
+  // Document Type Selector Styles
+  docTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  docTypeOption: {
+    width: '47%',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  docTypeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  docTypeName: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#111827',
+  },
+  docTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+    marginBottom: 12,
+  },
+  docTypeBadgeText: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  // AI Generate Styles
+  aiGenerateOption: {
+    backgroundColor: "#F3E8FF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E9D5FF",
+    marginBottom: 20,
+  },
+  aiContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+  },
+  aiTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#8B5CF6",
+    fontFamily: "Inter_700Bold",
+  },
+  aiSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+    fontFamily: "Inter_400Regular",
+  },
+  aiRobotIcon: {
+    width: 60,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
