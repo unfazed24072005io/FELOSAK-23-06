@@ -3085,7 +3085,8 @@ const resetDocumentForm = () => {
   setCreateItems([]);
   setCreateTaxRate(14);
   setCreateNotes("");
-  setShowTypeSelector(true); // ✅ Make sure this is set to true
+  // ✅ Make sure type selector is reset to true
+  setShowTypeSelector(true);
 };
 
 const saveDocument = async () => {
@@ -5497,20 +5498,25 @@ const renderGoalsContent = () => {
   );
 };
 // ==================== RENDER DOCS CONTENT ====================
+// ==================== RENDER DOCS CONTENT ====================
+// ==================== RENDER DOCS CONTENT ====================
 const renderDocsContent = () => {
-  const FILTERS: FilterType[] = ["All", "Invoice", "Quote", "Credit Note", "Purchase Order"];
-  const INVOICE_STATUS_FILTERS: { id: DocumentStatus; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "paid", label: "Paid" },
-    { id: "unpaid", label: "Unpaid" },
-  ];
-  
+  // ✅ Define ALL constants at the VERY TOP of the function
   const DOCUMENT_CONFIG: Record<string, { icon: string; color: string }> = {
     Invoice: { icon: "file-text", color: "#3B82F6" },
     Quote: { icon: "file", color: "#10B981" },
     "Credit Note": { icon: "credit-card", color: "#8B5CF6" },
     "Purchase Order": { icon: "package", color: "#EC4899" },
+    "Delivery Note": { icon: "truck", color: "#F59E0B" },
   };
+  
+  const FILTERS: FilterType[] = ["All", "Invoice", "Quote", "Credit Note", "Purchase Order", "Delivery Note"];
+  
+  const INVOICE_STATUS_FILTERS: { id: DocumentStatus; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "paid", label: "Paid" },
+    { id: "unpaid", label: "Unpaid" },
+  ];
 
   // Get counts for each type
   const getCountForType = (type: FilterType) => {
@@ -5599,73 +5605,72 @@ const renderDocsContent = () => {
   };
   
   // Document Card Component
-  // Document Card Component with Edit/Delete
-// Document Card Component
-const DocumentCard = ({ document, onPress, onDownload }: { document: Document; onPress: () => void; onDownload: () => void }) => {
-  const book = books.find(b => b.id === document.bookId);
-  
-  return (
-    <Pressable onPress={onPress} style={styles.docCard}>
-      <View style={[styles.docIconCircle, { 
-        backgroundColor: (DOCUMENT_CONFIG[document.type]?.color || '#3B82F6') + '15', 
-        width: 44, 
-        height: 44, 
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }]}>
-        <Feather 
-          name={DOCUMENT_CONFIG[document.type]?.icon || 'file-text'} 
-          size={20} 
-          color={DOCUMENT_CONFIG[document.type]?.color || '#3B82F6'} 
-        />
-      </View>
-      
-      <View style={styles.docCardContent}>
-        <View style={styles.docCardNumber}>
-          <Text style={styles.docCardNumberText} numberOfLines={1}>{document.number}</Text>
-        </View>
-        <View style={styles.docCardParty}>
-          <Text style={styles.docCardPartyText} numberOfLines={1}>{document.partyName}</Text>
-        </View>
-        {book && (
-          <Text style={styles.docCardBook} numberOfLines={1}>📁 {book.name}</Text>
-        )}
-      </View>
-      
-      <View style={styles.docCardBadgeContainer}>
-        <View style={[styles.typeBadge, { backgroundColor: (DOCUMENT_CONFIG[document.type]?.color || '#3B82F6') + '15' }]}>
-          <Text style={[styles.typeBadgeText, { color: DOCUMENT_CONFIG[document.type]?.color || '#3B82F6' }]}>
-            {document.type}
-          </Text>
+  const DocumentCard = ({ document, onPress, onDownload }: { document: Document; onPress: () => void; onDownload: () => void }) => {
+    const book = books.find(b => b.id === document.bookId);
+    
+    return (
+      <Pressable onPress={onPress} style={styles.docCard}>
+        <View style={[styles.docIconCircle, { 
+          backgroundColor: (DOCUMENT_CONFIG[document.type]?.color || '#3B82F6') + '15', 
+          width: 44, 
+          height: 44, 
+          borderRadius: 22,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }]}>
+          <Feather 
+            name={DOCUMENT_CONFIG[document.type]?.icon || 'file-text'} 
+            size={20} 
+            color={DOCUMENT_CONFIG[document.type]?.color || '#3B82F6'} 
+          />
         </View>
         
-        {document.type === "Invoice" && (
-          <View style={[
-            styles.invoiceStatusBadge,
-            { backgroundColor: document.status === 'paid' ? '#10B98120' : '#EF444420' }
-          ]}>
-            <View style={[
-              styles.invoiceStatusDot,
-              { backgroundColor: document.status === 'paid' ? '#10B981' : '#EF4444' }
-            ]} />
-            <Text style={[
-              styles.invoiceStatusText,
-              { color: document.status === 'paid' ? '#10B981' : '#EF4444' }
-            ]}>
-              {document.status === 'paid' ? 'Paid' : 'Unpaid'}
+        <View style={styles.docCardContent}>
+          <View style={styles.docCardNumber}>
+            <Text style={styles.docCardNumberText} numberOfLines={1}>{document.number}</Text>
+          </View>
+          <View style={styles.docCardParty}>
+            <Text style={styles.docCardPartyText} numberOfLines={1}>{document.partyName}</Text>
+          </View>
+          {book && (
+            <Text style={styles.docCardBook} numberOfLines={1}>📁 {book.name}</Text>
+          )}
+        </View>
+        
+        <View style={styles.docCardBadgeContainer}>
+          <View style={[styles.typeBadge, { backgroundColor: (DOCUMENT_CONFIG[document.type]?.color || '#3B82F6') + '15' }]}>
+            <Text style={[styles.typeBadgeText, { color: DOCUMENT_CONFIG[document.type]?.color || '#3B82F6' }]}>
+              {document.type}
             </Text>
           </View>
-        )}
-        
-        <Pressable onPress={onDownload} style={styles.docDownloadBtn}>
-          <Feather name="download" size={16} color="#3B82F6" />
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-};
+          
+          {document.type === "Invoice" && (
+            <View style={[
+              styles.invoiceStatusBadge,
+              { backgroundColor: document.status === 'paid' ? '#10B98120' : '#EF444420' }
+            ]}>
+              <View style={[
+                styles.invoiceStatusDot,
+                { backgroundColor: document.status === 'paid' ? '#10B981' : '#EF4444' }
+              ]} />
+              <Text style={[
+                styles.invoiceStatusText,
+                { color: document.status === 'paid' ? '#10B981' : '#EF4444' }
+              ]}>
+                {document.status === 'paid' ? 'Paid' : 'Unpaid'}
+              </Text>
+            </View>
+          )}
+          
+          <Pressable onPress={onDownload} style={styles.docDownloadBtn}>
+            <Feather name="download" size={16} color="#3B82F6" />
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  };
 
+  // ==================== RETURN JSX ====================
   return (
     <>
       {/* Documents Hub Title Section */}
@@ -5675,13 +5680,14 @@ const DocumentCard = ({ document, onPress, onDownload }: { document: Document; o
           <Text style={styles.docsHubSubtitle}>{documentsList.length} docs • AI-assisted creation</Text>
         </View>
         <Pressable onPress={() => {
-  resetDocumentForm();
-  setShowTypeSelector(true); // ✅ ADD THIS LINE
-  setShowCreateDocumentModal(true);
-}} style={styles.createDocBtn}>
-  <Feather name="plus" size={18} color="#FFFFFF" />
-  <Text style={styles.createDocBtnText}>Create Document</Text>
-</Pressable>
+          // ✅ Store the return page BEFORE navigating
+          AsyncStorage.setItem("return_to_page", "docs");
+          // ✅ Navigate to create-document page
+          router.push("/create-document");
+        }} style={styles.createDocBtn}>
+          <Feather name="plus" size={18} color="#FFFFFF" />
+          <Text style={styles.createDocBtnText}>Create Document</Text>
+        </Pressable>
       </View>
       
       {/* Document Type Filter Chips */}
@@ -5746,14 +5752,18 @@ const DocumentCard = ({ document, onPress, onDownload }: { document: Document; o
           <Feather name="file-text" size={48} color="#D1D5DB" />
           <Text style={styles.docsEmptyTitle}>No document yet</Text>
           <Text style={styles.docsEmptyText}>Generate your first one with AI or start from a blank template</Text>
-          <Pressable onPress={() => {
-  resetDocumentForm();
-  setShowTypeSelector(true); // ✅ Make sure this is set to true
-  setShowCreateDocumentModal(true);
-}} style={styles.createDocBtn}>
-  <Feather name="plus" size={18} color="#FFFFFF" />
-  <Text style={styles.createDocBtnText}>Create Document</Text>
-</Pressable>
+          <Pressable 
+            onPress={() => {
+              // ✅ Store the return page BEFORE navigating
+              AsyncStorage.setItem("return_to_page", "docs");
+              // ✅ Navigate to create-document page
+              router.push("/create-document");
+            }} 
+            style={styles.createDocBtn}
+          >
+            <Feather name="plus" size={18} color="#FFFFFF" />
+            <Text style={styles.createDocBtnText}>Create Document</Text>
+          </Pressable>
         </View>
       ) : (
         <View style={styles.docsList}>
@@ -5770,301 +5780,6 @@ const DocumentCard = ({ document, onPress, onDownload }: { document: Document; o
           ))}
         </View>
       )}
-      
-      {/* ==================== CREATE DOCUMENT MODAL ==================== */}
-      <Modal visible={showCreateDocumentModal} transparent animationType="slide" onRequestClose={() => {
-        setShowCreateDocumentModal(false);
-        resetDocumentForm();
-      }}>
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContentFull, { backgroundColor: "#FFFFFF", maxHeight: "95%" }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Document</Text>
-              <Pressable onPress={() => {
-                setShowCreateDocumentModal(false);
-                resetDocumentForm();
-              }} hitSlop={8}>
-                <Feather name="x" size={24} color="#000" />
-              </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-              {/* Document Type Selector - Only show initially */}
-              {showTypeSelector ? (
-                <>
-                  <Text style={styles.formLabel}>Select Document Type</Text>
-                  <View style={styles.docTypeGrid}>
-                    {Object.keys(DOCUMENT_CONFIG).map((type) => (
-                      <Pressable
-                        key={type}
-                        onPress={() => {
-                          setCreateDocType(type as any);
-                          setShowTypeSelector(false);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                        style={[
-                          styles.docTypeOption,
-                          { backgroundColor: DOCUMENT_CONFIG[type].color + "10" }
-                        ]}
-                      >
-                        <View style={[styles.docTypeIcon, { backgroundColor: DOCUMENT_CONFIG[type].color + "20" }]}>
-                          <Feather name={DOCUMENT_CONFIG[type].icon as any} size={24} color={DOCUMENT_CONFIG[type].color} />
-                        </View>
-                        <Text style={styles.docTypeName}>{type}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  
-                  <Pressable 
-                    onPress={() => {
-                      Alert.alert("AI Generation", "AI document generation coming soon!");
-                    }} 
-                    style={styles.aiGenerateOption}
-                  >
-                    <View style={styles.aiContent}>
-                      <View>
-                        <Text style={styles.aiTitle}>Generate with AI</Text>
-                        <Text style={styles.aiSubtitle}>Create any document using AI</Text>
-                      </View>
-                      <View style={styles.aiRobotIcon}>
-                        <Image 
-                          source={{ uri: "https://i.ibb.co/N6YschDX/Gemini-Generated-Image-aua6dsaua6dsaua6.png" }}
-                          style={styles.aiRobotImage}
-                          resizeMode="contain"
-                        />
-                      </View>
-                    </View>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  {/* Back to type selector */}
-                  <Pressable 
-                    onPress={() => setShowTypeSelector(true)} 
-                    style={styles.backToTypeBtn}
-                  >
-                    <Feather name="chevron-left" size={16} color="#3B82F6" />
-                    <Text style={styles.backToTypeBtnText}>Change Document Type</Text>
-                  </Pressable>
-                  
-                  {/* Document Type Badge */}
-                  <View style={[styles.docTypeBadge, { backgroundColor: DOCUMENT_CONFIG[createDocType].color + "15" }]}>
-                    <Feather name={DOCUMENT_CONFIG[createDocType].icon as any} size={16} color={DOCUMENT_CONFIG[createDocType].color} />
-                    <Text style={[styles.docTypeBadgeText, { color: DOCUMENT_CONFIG[createDocType].color }]}>
-                      {createDocType}
-                    </Text>
-                  </View>
-
-                  {/* Document Number */}
-                  <Text style={styles.formLabel}>Document No.</Text>
-                  <View style={styles.autoGeneratedField}>
-                    <Text style={styles.autoGeneratedText}>{getDocumentNumber()}</Text>
-                    <Text style={styles.autoGeneratedBadge}>Auto-generated</Text>
-                  </View>
-
-                  {/* Party Name */}
-                  <Text style={styles.formLabel}>Party Name *</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="Enter party name"
-                    placeholderTextColor="#9CA3AF"
-                    value={createPartyName}
-                    onChangeText={setCreatePartyName}
-                  />
-
-                  {/* Document Date */}
-                  <Text style={styles.formLabel}>Document Date</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                    value={createDocDate}
-                    onChangeText={setCreateDocDate}
-                  />
-
-                  {/* Due Date */}
-                  <Text style={styles.formLabel}>Due Date</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                    value={createDueDate}
-                    onChangeText={setCreateDueDate}
-                  />
-
-                  {/* Invoice Status - Only for Invoice */}
-                  {createDocType === "Invoice" && (
-                    <>
-                      <Text style={styles.formLabel}>Invoice Status</Text>
-                      <View style={styles.statusSelectorContainer}>
-                        <Pressable
-                          onPress={() => setCreateInvoiceStatus("paid")}
-                          style={[
-                            styles.statusOption,
-                            createInvoiceStatus === "paid" && styles.statusOptionPaidActive,
-                          ]}
-                        >
-                          <View style={[
-                            styles.statusDot,
-                            { backgroundColor: createInvoiceStatus === "paid" ? "#10B981" : "#D1D5DB" }
-                          ]} />
-                          <Text style={[
-                            styles.statusOptionText,
-                            createInvoiceStatus === "paid" && styles.statusOptionTextActive,
-                          ]}>Paid</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setCreateInvoiceStatus("unpaid")}
-                          style={[
-                            styles.statusOption,
-                            createInvoiceStatus === "unpaid" && styles.statusOptionUnpaidActive,
-                          ]}
-                        >
-                          <View style={[
-                            styles.statusDot,
-                            { backgroundColor: createInvoiceStatus === "unpaid" ? "#EF4444" : "#D1D5DB" }
-                          ]} />
-                          <Text style={[
-                            styles.statusOptionText,
-                            createInvoiceStatus === "unpaid" && styles.statusOptionTextActive,
-                          ]}>Unpaid</Text>
-                        </Pressable>
-                      </View>
-                    </>
-                  )}
-
-                  {/* Reference No and Order No - Credit Note, Purchase Order, Quote */}
-                  {["Credit Note", "Purchase Order", "Quote"].includes(createDocType) && (
-                    <>
-                      <Text style={styles.formLabel}>Reference No.</Text>
-                      <TextInput
-                        style={styles.formInput}
-                        placeholder="Enter reference number"
-                        placeholderTextColor="#9CA3AF"
-                        value={createReferenceNo}
-                        onChangeText={setCreateReferenceNo}
-                      />
-
-                      <Text style={styles.formLabel}>Order No.</Text>
-                      <TextInput
-                        style={styles.formInput}
-                        placeholder="Enter order number"
-                        placeholderTextColor="#9CA3AF"
-                        value={createOrderNo}
-                        onChangeText={setCreateOrderNo}
-                      />
-                    </>
-                  )}
-
-                  {/* Items Section */}
-                  <View style={styles.itemsHeader}>
-                    <Text style={styles.formLabel}>Items</Text>
-                    <Pressable onPress={addDocItem} style={styles.addItemBtn}>
-                      <Feather name="plus" size={16} color="#3B82F6" />
-                      <Text style={styles.addItemBtnText}>Add Item</Text>
-                    </Pressable>
-                  </View>
-
-                  {createItems.length === 0 ? (
-                    <View style={styles.emptyItems}>
-                      <Text style={styles.emptyItemsText}>No items added</Text>
-                    </View>
-                  ) : (
-                    createItems.map((item) => (
-                      <View key={item.id} style={styles.itemCard}>
-                        <View style={styles.itemHeader}>
-                          <TextInput
-                            style={styles.itemNameInput}
-                            placeholder="Item name"
-                            placeholderTextColor="#9CA3AF"
-                            value={item.name}
-                            onChangeText={(text) => updateDocItem(item.id, 'name', text)}
-                          />
-                          <Pressable onPress={() => removeDocItem(item.id)}>
-                            <Feather name="trash-2" size={16} color="#EF4444" />
-                          </Pressable>
-                        </View>
-                        <View style={styles.itemRow}>
-                          <View style={styles.itemQty}>
-                            <Text style={styles.itemLabel}>Qty</Text>
-                            <TextInput
-                              style={styles.qtyInput}
-                              keyboardType="numeric"
-                              value={item.quantity.toString()}
-                              onChangeText={(text) => updateDocItem(item.id, 'quantity', Number(text) || 0)}
-                            />
-                          </View>
-                          <View style={styles.itemPrice}>
-                            <Text style={styles.itemLabel}>Price</Text>
-                            <TextInput
-                              style={styles.priceInput}
-                              keyboardType="numeric"
-                              value={item.price.toString()}
-                              onChangeText={(text) => updateDocItem(item.id, 'price', Number(text) || 0)}
-                            />
-                          </View>
-                          <View style={styles.itemTotal}>
-                            <Text style={styles.itemLabel}>Total</Text>
-                            <Text style={styles.totalText}>{formatAmount(item.total)}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    ))
-                  )}
-
-                  {/* Totals Section */}
-                  {createItems.length > 0 && (
-                    <View style={styles.totalsSection}>
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Subtotal</Text>
-                        <Text>{formatAmount(subtotal)}</Text>
-                      </View>
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Tax ({createTaxRate}%)</Text>
-                        <Text>{formatAmount(tax)}</Text>
-                      </View>
-                      <View style={[styles.totalRow, styles.grandTotal]}>
-                        <Text style={styles.grandTotalLabel}>Total</Text>
-                        <Text style={styles.grandTotalAmount}>{formatAmount(total)}</Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Notes */}
-                  <Text style={styles.formLabel}>Notes</Text>
-                  <TextInput
-                    style={[styles.formInput, styles.notesTextArea]}
-                    placeholder="Additional notes..."
-                    placeholderTextColor="#9CA3AF"
-                    value={createNotes}
-                    onChangeText={setCreateNotes}
-                    multiline
-                    numberOfLines={3}
-                  />
-
-                  {/* Submit Button */}
-                  <Pressable
-                    onPress={saveDocument}
-                    disabled={isSubmittingDoc}
-                    style={[styles.submitBtn, isSubmittingDoc && styles.submitBtnDisabled]}
-                  >
-                    <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.submitGradient}>
-                      {isSubmittingDoc ? (
-                        <ActivityIndicator size="small" color="#FFF" />
-                      ) : (
-                        <>
-                          <Feather name="check" size={18} color="#FFF" />
-                          <Text style={styles.submitBtnText}>Create {createDocType}</Text>
-                        </>
-                      )}
-                    </LinearGradient>
-                  </Pressable>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
       
       {/* Document Detail Modal */}
       <Modal visible={showDocumentDetailModal} transparent animationType="slide" onRequestClose={() => setShowDocumentDetailModal(false)}>
@@ -6163,7 +5878,8 @@ const DocumentCard = ({ document, onPress, onDownload }: { document: Document; o
           </View>
         )}
       </Modal>
-<EditDocumentModal
+      
+      <EditDocumentModal
         visible={showEditDocumentModal}
         onClose={() => {
           setShowEditDocumentModal(false);
